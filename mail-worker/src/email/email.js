@@ -10,6 +10,7 @@ import emailUtils from '../utils/email-utils';
 import roleService from '../service/role-service';
 import userService from '../service/user-service';
 import telegramService from '../service/telegram-service';
+import aiService from '../service/ai-service';
 
 export async function email(message, env, ctx) {
 
@@ -24,14 +25,18 @@ export async function email(message, env, ctx) {
 			ruleEmail,
 			ruleType,
 			r2Domain,
-			noRecipient
+			noRecipient,
+			blackSubject,
+			blackContent,
+			blackFrom,
+			aiCode,
+			aiCodeFilter
 		} = await settingService.query({ env });
 
 		if (receive === settingConst.receive.CLOSE) {
 			message.setReject('Service suspended');
 			return;
 		}
-
 
 		const reader = message.raw.getReader();
 		let content = '';
@@ -43,6 +48,14 @@ export async function email(message, env, ctx) {
 		}
 
 		const email = await PostalMime.parse(content);
+
+
+		const blockFlag = checkBlock(blackSubject, blackContent, blackFrom, email);
+
+		if (blockFlag) {
+			message.setReject('Message rejected');
+			return;
+		}
 
 		const account = await accountService.selectByEmailIncludeDel({ env: env }, message.to);
 
@@ -79,6 +92,7 @@ export async function email(message, env, ctx) {
 		}
 
 		const toName = email.to.find(item => item.address === message.to)?.name || '';
+		const code = await aiService.extractCode({ env }, email, { aiCode, aiCodeFilter });
 
 		const params = {
 			toEmail: message.to,
@@ -86,6 +100,7 @@ export async function email(message, env, ctx) {
 			sendEmail: email.from.address,
 			name: email.from.name || emailUtils.getName(email.from.address),
 			subject: email.subject,
+			code,
 			content: email.html,
 			text: email.text,
 			cc: email.cc ? JSON.stringify(email.cc) : '[]',
@@ -168,4 +183,32 @@ export async function email(message, env, ctx) {
 		console.error('邮件接收异常: ', e);
 		throw e
 	}
+}
+
+function checkBlock(blackSubjectStr, blackContentStr, blackFromStr, email) {
+
+	const blackFromList = blackFromStr ? blackFromStr.split(',') : []
+	const blackContentList = blackContentStr ? blackContentStr.split(',') : []
+	const blackSubjectList = blackSubjectStr ? blackSubjectStr.split(',') : []
+
+	for (const blackSubject of blackSubjectList) {
+		if (email.subject?.includes(blackSubject)) {
+			return true
+		}
+	}
+
+	for (const blackContent of blackContentList) {
+		if (email.html?.includes(blackContent) || email.text?.includes(blackContent)) {
+			return true
+		}
+	}
+
+	for (const blackFrom of blackFromList) {
+		if (email.from.address === blackFrom || emailUtils.getDomain(email.from.address) === blackFrom) {
+			return true
+		}
+	}
+
+	return false
+
 }

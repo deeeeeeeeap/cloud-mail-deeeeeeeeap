@@ -19,7 +19,7 @@ app.put('/role/set', async (c) => {
 	return c.json(result.ok());
 });
 
-app.get('/role/permTree', async (c) => {
+app.get('/role/tree', async (c) => {
 	const tree = await permService.tree(c);
 	return c.json(result.ok(tree));
 });

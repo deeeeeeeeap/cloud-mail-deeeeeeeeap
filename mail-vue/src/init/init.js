@@ -54,18 +54,4 @@ export async function init() {
         settingStore.domainList = setting.domainList;
         document.title = setting.title;
     }
-
-    removeLoading();
 }
-
-function removeLoading() {
-    if (window.innerWidth < 1025) {
-        document.documentElement.style.setProperty('--loading-hide-transition', 'none')
-    }
-    const doc = document.getElementById('loading-first');
-    doc.classList.add('loading-hide')
-    setTimeout(() => {
-        doc.remove()
-    },1000)
-}
-

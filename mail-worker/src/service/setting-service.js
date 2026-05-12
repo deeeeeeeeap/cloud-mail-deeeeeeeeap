@@ -8,6 +8,7 @@ import constant from '../const/constant';
 import BizError from '../error/biz-error';
 import {t} from '../i18n/i18n'
 import verifyRecordService from './verify-record-service';
+import userContext from '../security/user-context';
 
 const settingService = {
 
@@ -49,6 +50,7 @@ const settingService = {
 
 
 		let linuxdoSwitch = c.env.linuxdo_switch;
+		let projectLink = c.env.project_link;
 
 		if (typeof linuxdoSwitch === 'string' && linuxdoSwitch === 'true') {
 			linuxdoSwitch = true
@@ -57,6 +59,16 @@ const settingService = {
 		} else {
 			linuxdoSwitch = false
 		}
+
+		if (typeof projectLink === 'string' && projectLink === 'false') {
+			projectLink = false
+		} else if (projectLink === false) {
+			projectLink = false
+		} else {
+			projectLink = true
+		}
+
+		setting.projectLink = projectLink;
 
 		setting.linuxdoClientId = c.env.linuxdo_client_id;
 		setting.linuxdoCallbackUrl = c.env.linuxdo_callback_url;
@@ -89,6 +101,7 @@ const settingService = {
 		settingRow.s3AccessKey = settingRow.s3AccessKey ? `${settingRow.s3AccessKey.slice(0, 12)}******` : null;
 		settingRow.s3SecretKey = settingRow.s3SecretKey ? `${settingRow.s3SecretKey.slice(0, 12)}******` : null;
 		settingRow.hasR2 = !!c.env.r2
+		settingRow.hasCfEmail = !!c.env.email
 
 		let regVerifyOpen = false
 		let addVerifyOpen = false
@@ -119,6 +132,10 @@ const settingService = {
 
 		if (Array.isArray(params.emailPrefixFilter)) {
 			params.emailPrefixFilter = params.emailPrefixFilter + '';
+		}
+
+		if (Array.isArray(params.aiCodeFilter)) {
+			params.aiCodeFilter = params.aiCodeFilter + '';
 		}
 
 		params.resendTokens = JSON.stringify(resendTokens);
@@ -171,9 +188,18 @@ const settingService = {
 		return background;
 	},
 
+
+	async setBlacklist(c, params) {
+		const { blackSubject, blackContent, blackFrom  } = params
+		await orm(c).update(setting).set({ blackSubject, blackContent, blackFrom }).run();
+		await this.refresh(c);
+		return this.get(c);
+	},
+
 	async websiteConfig(c) {
 
 		const settingRow = await this.get(c, true);
+		const token = await userContext.getToken(c);
 
 		return {
 			register: settingRow.register,
@@ -188,7 +214,7 @@ const settingService = {
 			siteKey: settingRow.siteKey,
 			background: settingRow.background,
 			loginOpacity: settingRow.loginOpacity,
-			domainList: settingRow.domainList,
+			domainList: settingRow.loginDomain === 1 && !token ? [] : settingRow.domainList,
 			regKey: settingRow.regKey,
 			regVerifyOpen: settingRow.regVerifyOpen,
 			addVerifyOpen: settingRow.addVerifyOpen,
@@ -204,9 +230,11 @@ const settingService = {
 			linuxdoClientId: settingRow.linuxdoClientId,
 			linuxdoCallbackUrl: settingRow.linuxdoCallbackUrl,
 			linuxdoSwitch: settingRow.linuxdoSwitch,
-			minEmailPrefix: settingRow.minEmailPrefix
+			minEmailPrefix: settingRow.minEmailPrefix,
+			projectLink: settingRow.projectLink
 		};
-	}
+	},
+
 };
 
 export default settingService;

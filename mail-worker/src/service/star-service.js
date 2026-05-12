@@ -15,7 +15,7 @@ const starService = {
 		if (!email) {
 			throw new BizError(t('starNotExistEmail'));
 		}
-		if (!email.userId === userId) {
+		if (email.userId !== userId) {
 			throw new BizError(t('starNotExistEmail'));
 		}
 		const exist = await orm(c).select().from(star).where(

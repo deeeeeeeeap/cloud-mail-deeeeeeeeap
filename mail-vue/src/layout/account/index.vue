@@ -127,7 +127,7 @@
 </template>
 <script setup>
 import {Icon} from "@iconify/vue";
-import {nextTick, reactive, ref, watch} from "vue";
+import {computed, nextTick, reactive, ref, watch} from "vue";
 import {
   accountList,
   accountAdd,
@@ -153,7 +153,7 @@ const settingStore = useSettingStore();
 const emailStore = useEmailStore();
 const showAdd = ref(false)
 const addLoading = ref(false);
-const domainList = settingStore.domainList
+const domainList = computed(() => settingStore.domainList)
 const accounts = reactive([])
 const noLoading = ref(false)
 const loading = ref(false)
@@ -188,6 +188,12 @@ if (hasPerm('account:query')) {
 watch(() => accountStore.changeUserAccountName, () => {
   accounts[0].name = accountStore.changeUserAccountName
 })
+
+watch(() => settingStore.domainList, (list) => {
+  if (!addForm.suffix && list.length > 0) {
+    addForm.suffix = list[0]
+  }
+}, {immediate: true})
 
 
 const openSelect = () => {
@@ -338,6 +344,7 @@ function changeAccount(account) {
 }
 
 function add() {
+  addForm.suffix = addForm.suffix || settingStore.domainList[0]
   showAdd.value = true
   setTimeout(() => {
     addRef.value.focus()

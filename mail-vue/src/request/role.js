@@ -5,7 +5,7 @@ export function roleAdd(params) {
 }
 
 export function rolePermTree() {
-    return http.get('/role/permTree')
+    return http.get('/role/tree')
 }
 
 export function roleRoleList() {

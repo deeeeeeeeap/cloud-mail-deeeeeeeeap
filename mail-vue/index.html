@@ -43,77 +43,94 @@
 
   .loading-hide {
     pointer-events: none;
-    transition: all 200ms;
     opacity: 0;
   }
 
   .loading-icon {
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: 30px;
+    gap: 2px;
   }
 
-  .circular {
-    height: 30px;
-    width: 30px;
-    animation: loading-rotate 1s linear infinite;
+  .loading-image {
+    width: 70px;
+    height: 70px;
+    object-fit: contain;
   }
 
-  .loading-path .dot1 {
-    transform: translate(3.75px, 3.75px);
-    fill: #409EFF;
-    animation: custom-spin-move 1s infinite linear alternate;
-    opacity: 0.3;
+  .loading-progress {
+    position: relative;
+    width: 64px;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(64, 158, 255, 0.18);
   }
 
-  .loading-path .dot2 {
-    transform: translate(calc(100% - 3.75px), 3.75px);
-    fill: #409EFF;
-    animation: custom-spin-move 1s infinite linear alternate;
-    opacity: 0.3;
-    animation-delay: 0.4s;
+  .loading-progress::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: #409EFF;
+    transform: scaleX(0);
+    transform-origin: left center;
+    animation: loading-progress-grow 2.4s linear forwards;
   }
 
-  .loading-path .dot3 {
-    transform: translate(3.75px, calc(100% - 3.75px));
-    fill: #409EFF;
-    animation: custom-spin-move 1s infinite linear alternate;
-    opacity: 0.3;
-    animation-delay: 1.2s;
+  .loading-progress::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 24px;
+    height: 100%;
+    border-radius: inherit;
+    background: rgba(64, 158, 255, 0.45);
+    filter: blur(4px);
+    transform: translateX(-24px);
+    animation: loading-progress-peg 2.4s linear forwards;
   }
 
-  .loading-path .dot4 {
-    transform: translate(calc(100% - 3.75px), calc(100% - 3.75px));
-    fill: #409EFF;
-    animation: custom-spin-move 1s infinite linear alternate;
-    opacity: 0.3;
-    animation-delay: 0.8s;
+  .loading-complete .loading-progress::before {
+    animation: none;
+    transform: scaleX(1);
+    transition: transform 200ms linear;
   }
 
-  @keyframes loading-rotate {
-    to {
-      transform: rotate(360deg);
+  .loading-complete .loading-progress::after {
+    animation: none;
+    transform: translateX(60px);
+    transition: transform 200ms linear;
+  }
+
+  @keyframes loading-progress-grow {
+    0% {
+      transform: scaleX(0);
+    }
+    100% {
+      transform: scaleX(1);
     }
   }
 
-  @keyframes custom-spin-move {
-    to {
-      opacity: 1;
+  @keyframes loading-progress-peg {
+    0% {
+      transform: translateX(-24px);
+    }
+    100% {
+      transform: translateX(60px);
     }
   }
 </style>
 <body>
 <div id="loading-first" >
   <div class="loading-icon">
-    <svg class="circular" viewBox="0 0 20 20">
-      <g class="loading-path">
-        <circle r="3.375" class="dot1" rx="0" ry="0"/>
-        <circle r="3.375" class="dot2" rx="0" ry="0"/>
-        <circle r="3.375" class="dot4" rx="0" ry="0"/>
-        <circle r="3.375" class="dot3" rx="0" ry="0"/>
-      </g>
-    </svg>
+    <img class="loading-image" src="/mail-pwa.png" alt="Cloud Mail">
+    <div class="loading-progress" aria-hidden="true"></div>
   </div>
 </div>
 <div id="app"></div>
