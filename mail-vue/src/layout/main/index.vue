@@ -60,10 +60,11 @@ function showNotice(data) {
     elNotification.close()
   }
 
+  const noticeWidth = Math.max(Number(data.noticeWidth) || 0, 640)
   const style = document.createElement('style');
   style.innerHTML = `
   .custom-notice.el-notification {
-    --el-notification-width: min(${data.noticeWidth}px,calc(100% - 30px)) !important;
+    --el-notification-width: min(${noticeWidth}px,calc(100% - 30px)) !important;
   }
   `;
 
@@ -71,7 +72,7 @@ function showNotice(data) {
 
   elNotification = ElNotification({
     title: data.noticeTitle,
-    message: `<div style="width: 100%;height: 100%;white-space: pre-wrap;word-break: break-word;">${data.noticeContent}</div>`,
+    message: `<div style="width: 100%;height: 100%;white-space: pre;word-break: normal;overflow-x: auto;">${data.noticeContent}</div>`,
     type: data.noticeType === 'none' ? '' : data.noticeType,
     duration: data.noticeDuration,
     position: data.noticePosition,
