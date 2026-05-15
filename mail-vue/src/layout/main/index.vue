@@ -60,11 +60,10 @@ function showNotice(data) {
     elNotification.close()
   }
 
-  const noticeWidth = Math.max(Number(data.noticeWidth) || 0, 640)
   const style = document.createElement('style');
   style.innerHTML = `
   .custom-notice.el-notification {
-    --el-notification-width: min(${noticeWidth}px,calc(100% - 30px)) !important;
+    --el-notification-width: min(${Number(data.noticeWidth) || 400}px,calc(100% - 30px)) !important;
   }
   `;
 
