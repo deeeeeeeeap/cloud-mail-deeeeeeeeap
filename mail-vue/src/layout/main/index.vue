@@ -23,6 +23,7 @@ const route = useRoute()
 let  innerWidth =  window.innerWidth
 
 let elNotification = null
+const noticeStyleId = 'cloud-mail-notice-style'
 
 const accountShow = computed(() => {
   return uiStore.accountShow && settingStore.settings.manyEmail === 0
@@ -60,14 +61,7 @@ function showNotice(data) {
     elNotification.close()
   }
 
-  const style = document.createElement('style');
-  style.innerHTML = `
-  .custom-notice.el-notification {
-    --el-notification-width: min(${Number(data.noticeWidth) || 400}px,calc(100% - 30px)) !important;
-  }
-  `;
-
-  document.head.appendChild(style);
+  updateNoticeStyle(data.noticeWidth)
 
   elNotification = ElNotification({
     title: data.noticeTitle,
@@ -81,6 +75,24 @@ function showNotice(data) {
   })
 }
 
+function updateNoticeStyle(noticeWidth) {
+  const width = Number(noticeWidth)
+  const safeWidth = Number.isFinite(width) && width > 0 ? width : 400
+  let style = document.getElementById(noticeStyleId)
+
+  if (!style) {
+    style = document.createElement('style')
+    style.id = noticeStyleId
+    document.head.appendChild(style)
+  }
+
+  style.textContent = `
+  .custom-notice.el-notification {
+    --el-notification-width: min(${safeWidth}px, calc(100% - 30px)) !important;
+  }
+  `
+}
+
 onMounted(() => {
   window.addEventListener('resize', handleResize)
   handleResize()
@@ -88,6 +100,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  if (elNotification) {
+    elNotification.close()
+    elNotification = null
+  }
+  document.getElementById(noticeStyleId)?.remove()
 })
 
 const handleResize = () => {
