@@ -71,7 +71,7 @@ function showNotice(data) {
 
   elNotification = ElNotification({
     title: data.noticeTitle,
-    message: `<div style="width: 100%;height: 100%;">${data.noticeContent}</div>`,
+    message: `<div style="width: 100%;height: 100%;white-space: pre-wrap;word-break: break-word;">${data.noticeContent}</div>`,
     type: data.noticeType === 'none' ? '' : data.noticeType,
     duration: data.noticeDuration,
     position: data.noticePosition,
