@@ -3,6 +3,7 @@
                :cancel-success="cancelStar"
                :star-success="addStar"
                :getEmailList="getEmailList"
+               :getEmailDetail="emailDetail"
                :emailDelete="emailDelete"
                :star-add="starAdd"
                show-status
@@ -25,7 +26,7 @@
 import {useAccountStore} from "@/store/account.js";
 import {useEmailStore} from "@/store/email.js";
 import emailScroll from "@/components/email-scroll/index.vue"
-import {emailList, emailDelete} from "@/request/email.js";
+import {emailList, emailDelete, emailDetail} from "@/request/email.js";
 import {starAdd, starCancel} from "@/request/star.js";
 import {defineOptions, onMounted, reactive, ref, watch} from "vue";
 import router from "@/router/index.js";

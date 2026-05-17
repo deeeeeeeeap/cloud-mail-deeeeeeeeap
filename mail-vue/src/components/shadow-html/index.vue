@@ -77,6 +77,13 @@ function updateContent() {
       ${cleanedHtml}
     </div>
   `;
+
+  shadowRoot.querySelectorAll('img, iframe').forEach(node => {
+    node.setAttribute('loading', 'lazy');
+  });
+  shadowRoot.querySelectorAll('img').forEach(node => {
+    node.setAttribute('decoding', 'async');
+  });
 }
 
 function autoScale() {

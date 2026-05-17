@@ -3,6 +3,7 @@
                :allow-star="false"
                :cancel-success="cancelStar"
                :getEmailList="starList"
+               :getEmailDetail="emailDetail"
                :emailDelete="emailDelete"
                :star-add="starAdd"
                :star-cancel="starCancel"
@@ -14,7 +15,7 @@
 
 <script setup>
 import emailScroll from "@/components/email-scroll/index.vue"
-import {emailDelete} from "@/request/email.js";
+import {emailDelete, emailDetail} from "@/request/email.js";
 import {starAdd, starCancel, starList} from "@/request/star.js";
 import {useEmailStore} from "@/store/email.js";
 import {defineOptions, onMounted, ref} from "vue";

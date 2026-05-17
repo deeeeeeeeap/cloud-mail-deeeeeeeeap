@@ -10,12 +10,23 @@ import {t} from '../i18n/i18n'
 import verifyRecordService from './verify-record-service';
 import userContext from '../security/user-context';
 
+const SETTING_CACHE_TTL = 30 * 1000;
+let settingCache = null;
+
+function cloneSetting(settingRow) {
+	return JSON.parse(JSON.stringify(settingRow));
+}
+
 const settingService = {
 
 	async refresh(c) {
 		const settingRow = await orm(c).select().from(setting).get();
 		settingRow.resendTokens = JSON.parse(settingRow.resendTokens);
 		c.set('setting', settingRow);
+		settingCache = {
+			value: cloneSetting(settingRow),
+			expiresAt: Date.now() + SETTING_CACHE_TTL
+		};
 		await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingRow));
 	},
 
@@ -25,7 +36,18 @@ const settingService = {
 			return c.get('setting')
 		}
 
-		const setting = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
+		let setting = null;
+		if (settingCache && settingCache.expiresAt > Date.now()) {
+			setting = cloneSetting(settingCache.value);
+		} else {
+			setting = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
+			if (setting) {
+				settingCache = {
+					value: cloneSetting(setting),
+					expiresAt: Date.now() + SETTING_CACHE_TTL
+				};
+			}
+		}
 
 		if (!setting) {
 			throw new BizError('数据库未初始化 Database not initialized.');

@@ -2,6 +2,7 @@
   <div class="email-list-box">
     <emailScroll ref="sysEmailScroll"
                  :get-emailList="getEmailList"
+                 :get-email-detail="allEmailDetail"
                  :email-delete="allEmailDelete"
                  :star-add="starAdd"
                  :star-cancel="starCancel"
@@ -36,6 +37,7 @@
                 <el-option key="4" :label="$t('subject')" :value="'subject'"/>
                 <el-option key="1" :label="$t('user')" :value="'user'"/>
                 <el-option key="2" :label="$t('selectEmail')" :value="'account'"/>
+                <el-option key="5" :label="$t('searchByContent')" :value="'content'"/>
               </el-select>
               <div class="search-type">
                 <span>{{ selectTitle }}</span>
@@ -96,7 +98,8 @@ import {
   allEmailList,
   allEmailDelete,
   allEmailBatchDelete,
-  allEmailLatest
+  allEmailLatest,
+  allEmailDetail
 } from "@/request/all-email.js";
 import {Icon} from "@iconify/vue";
 import router from "@/router/index.js";
@@ -136,6 +139,7 @@ const params = reactive({
   accountEmail: null,
   name: null,
   subject: null,
+  searchText: null,
   searchType: 'name'
 })
 
@@ -170,6 +174,7 @@ const selectTitle = computed(() => {
   if (params.searchType === 'account') return t('selectEmail')
   if (params.searchType === 'name') return t('sender')
   if (params.searchType === 'subject') return t('subject')
+  if (params.searchType === 'content') return t('searchByContent')
 })
 
 const paramsStar = localStorage.getItem('all-email-params')
@@ -241,6 +246,7 @@ function refreshBefore() {
   params.accountEmail = null
   params.name = null
   params.subject = null
+  params.searchText = null
   params.searchType = 'name'
 }
 
@@ -250,6 +256,7 @@ function search() {
   params.accountEmail = null
   params.name = null
   params.subject = null
+  params.searchText = null
 
   if (params.searchType === 'user') {
     params.userEmail = searchValue.value
@@ -265,6 +272,10 @@ function search() {
 
   if (params.searchType === 'subject') {
     params.subject = searchValue.value
+  }
+
+  if (params.searchType === 'content') {
+    params.searchText = searchValue.value
   }
 
   sysEmailScroll.value.refreshList();

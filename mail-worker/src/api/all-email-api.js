@@ -7,6 +7,11 @@ app.get('/allEmail/list', async (c) => {
 	return c.json(result.ok(data));
 })
 
+app.get('/allEmail/detail', async (c) => {
+	const email = await emailService.detail(c, c.req.query(), null, true);
+	return c.json(result.ok(email));
+})
+
 app.delete('/allEmail/delete', async (c) => {
 	const list = await emailService.physicsDelete(c, c.req.query());
 	return c.json(result.ok(list));

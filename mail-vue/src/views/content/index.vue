@@ -78,7 +78,7 @@ import ShadowHtml from '@/components/shadow-html/index.vue'
 import {reactive, ref, watch, onMounted, onUnmounted} from "vue";
 import {useRouter} from 'vue-router'
 import {ElMessage, ElMessageBox} from 'element-plus'
-import {emailDelete, emailRead} from "@/request/email.js";
+import {emailDelete, emailDetail, emailRead} from "@/request/email.js";
 import {Icon} from "@iconify/vue";
 import {useEmailStore} from "@/store/email.js";
 import {useAccountStore} from "@/store/account.js";
@@ -88,7 +88,7 @@ import {getExtName, formatBytes} from "@/utils/file-utils.js";
 import {cvtR2Url,toOssDomain} from "@/utils/convert.js";
 import {getIconByName} from "@/utils/icon-utils.js";
 import {useSettingStore} from "@/store/setting.js";
-import {allEmailDelete} from "@/request/all-email.js";
+import {allEmailDelete, allEmailDetail} from "@/request/all-email.js";
 import {useUiStore} from "@/store/ui.js";
 import {useI18n} from "vue-i18n";
 import {EmailUnreadEnum} from "@/enums/email-enum.js";
@@ -101,6 +101,7 @@ const router = useRouter()
 const email = emailStore.contentData.email
 const showPreview = ref(false)
 const srcList = reactive([])
+let detailPromise = null
 
 const { t } = useI18n()
 watch(() => accountStore.currentAccountId, () => {
@@ -108,6 +109,7 @@ watch(() => accountStore.currentAccountId, () => {
 })
 
 onMounted(() => {
+  loadDetail();
   if (emailStore.contentData.showUnread && email.unread === EmailUnreadEnum.UNREAD) {
     email.unread = EmailUnreadEnum.READ;
     emailRead([email.emailId]);
@@ -118,12 +120,36 @@ onUnmounted(() => {
   emailStore.contentData.showUnread = false;
 })
 
-function openReply() {
+async function openReply() {
+  await loadDetail();
   uiStore.writerRef.openReply(email)
 }
 
-function openForward() {
+async function openForward() {
+  await loadDetail();
   uiStore.writerRef.openForward(email)
+}
+
+async function loadDetail() {
+  if (!email.emailId) {
+    return;
+  }
+  if (detailPromise) {
+    return detailPromise;
+  }
+
+  detailPromise = (async () => {
+    const detail = emailStore.contentData.delType === 'physics'
+        ? await allEmailDetail(email.emailId)
+        : await emailDetail(email.emailId);
+
+    Object.assign(email, detail);
+  })().catch(error => {
+    detailPromise = null;
+    throw error;
+  });
+
+  return detailPromise;
 }
 
 function toMessage(message) {

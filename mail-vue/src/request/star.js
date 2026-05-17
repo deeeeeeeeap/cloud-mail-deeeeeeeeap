@@ -9,5 +9,5 @@ export function starCancel(emailId) {
 }
 
 export function starList(emailId,size) {
-    return http.get('/star/list', {params: {emailId,size}})
+    return http.get('/star/list', {params: {emailId,size,lite: 1}})
 }

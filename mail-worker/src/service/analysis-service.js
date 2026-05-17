@@ -37,7 +37,10 @@ const analysisService = {
 
 		const { keys } = await c.env.kv.list({ prefix: kvConst.ANALYSIS_ECHARTS });
 
-		await Promise.all(keys.map(key => this.refreshEchartsCacheByKey(c, key.name)));
+		await Promise.all([
+			...keys.map(key => this.refreshEchartsCacheByKey(c, key.name)),
+			this.numberCount(c)
+		]);
 	},
 
 	async queryEcharts(c, params) {
@@ -64,7 +67,7 @@ const analysisService = {
 			sendDayCountRaw,
 			daySendTotalRaw
 		] = await Promise.all([
-			analysisDao.numberCount(c),
+			this.numberCount(c),
 
 			orm(c)
 				.select({ name: email.name, total: count() })
@@ -100,6 +103,59 @@ const analysisService = {
 				sendDayCount
 			},
 			daySendTotal: Number(daySendTotal)
+		};
+	},
+
+	async numberCount(c) {
+		if (!this.analysisCacheEnabled(c)) {
+			return analysisDao.numberCount(c);
+		}
+
+		const cache = await c.env.kv.get(kvConst.ANALYSIS_NUMBER_COUNT, { type: 'json' });
+		if (cache) {
+			return cache;
+		}
+
+		const data = await analysisDao.numberCount(c);
+		await c.env.kv.put(kvConst.ANALYSIS_NUMBER_COUNT, JSON.stringify(data), { expirationTtl: 60 });
+		return data;
+	},
+
+	async d1Health(c) {
+		const start = Date.now();
+		const [emailCount, indexRows, queryPlan] = await Promise.all([
+			c.env.db.prepare(`SELECT COUNT(*) AS total FROM email`).first(),
+			c.env.db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all(),
+			c.env.db.prepare(`
+				EXPLAIN QUERY PLAN
+				SELECT email_id
+				FROM email
+				WHERE user_id = ? AND account_id = ? AND type = ? AND is_del = ?
+				ORDER BY email_id DESC
+				LIMIT 50
+			`).bind(0, 0, emailConst.type.RECEIVE, 0).all()
+		]);
+
+		const durationMs = Date.now() - start;
+		const indexes = (indexRows.results || []).map(row => row.name);
+		const expectedIndexes = [
+			'idx_email_user_account_type_del_id',
+			'idx_email_user_type_del_id',
+			'idx_email_type_status_id',
+			'idx_attachments_email_type',
+			'idx_star_user_email'
+		];
+		const missingIndexes = expectedIndexes.filter(name => !indexes.includes(name));
+		const queryPlanText = (queryPlan.results || []).map(row => row.detail || '').join(' | ');
+
+		return {
+			ok: missingIndexes.length === 0,
+			durationMs,
+			slow: durationMs > 200,
+			emailTotal: emailCount.total,
+			missingIndexes,
+			queryPlan: queryPlanText,
+			usesIndex: /USING .*INDEX/i.test(queryPlanText)
 		};
 	},
 

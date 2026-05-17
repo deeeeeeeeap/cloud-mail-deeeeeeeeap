@@ -31,7 +31,7 @@ const regKeyService = {
 			throw new BizError(t('isExistRegKye'));
 		}
 
-		const roleRow = roleService.selectById(c, roleId);
+		const roleRow = await roleService.selectById(c, roleId);
 		if (!roleRow) {
 			throw new BizError(t('roleNotExist'));
 		}

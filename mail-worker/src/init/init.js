@@ -41,7 +41,57 @@ const dbInit = {
 			`ALTER TABLE setting ADD COLUMN ai_code_filter TEXT NOT NULL DEFAULT '';`,
 			`ALTER TABLE setting ADD COLUMN black_subject TEXT NOT NULL DEFAULT '';`,
 			`ALTER TABLE setting ADD COLUMN black_content TEXT NOT NULL DEFAULT '';`,
-			`ALTER TABLE setting ADD COLUMN black_from TEXT NOT NULL DEFAULT '';`
+			`ALTER TABLE setting ADD COLUMN black_from TEXT NOT NULL DEFAULT '';`,
+			`CREATE INDEX IF NOT EXISTS idx_email_user_account_type_del_id ON email(user_id, account_id, type, is_del, email_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_email_user_type_del_id ON email(user_id, type, is_del, email_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_email_type_status_id ON email(type, status, email_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_attachments_email_type ON attachments(email_id, type);`,
+			`CREATE INDEX IF NOT EXISTS idx_star_user_email ON star(user_id, email_id);`,
+			`CREATE TABLE IF NOT EXISTS email_search (
+				email_id INTEGER PRIMARY KEY,
+				user_id INTEGER NOT NULL DEFAULT 0,
+				account_id INTEGER NOT NULL DEFAULT 0,
+				name TEXT NOT NULL DEFAULT '',
+				subject TEXT NOT NULL DEFAULT '',
+				send_email TEXT NOT NULL DEFAULT '',
+				to_email TEXT NOT NULL DEFAULT '',
+				user_email TEXT NOT NULL DEFAULT '',
+				search_text TEXT NOT NULL DEFAULT '',
+				type INTEGER NOT NULL DEFAULT 0,
+				status INTEGER NOT NULL DEFAULT 0,
+				is_del INTEGER NOT NULL DEFAULT 0,
+				create_time DATETIME DEFAULT CURRENT_TIMESTAMP
+			);`,
+			`CREATE INDEX IF NOT EXISTS idx_email_search_type_status_id ON email_search(type, status, email_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_email_search_del_id ON email_search(is_del, email_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_email_search_user_id ON email_search(user_id, email_id);`,
+			`INSERT OR REPLACE INTO email_search (
+				email_id, user_id, account_id, name, subject, send_email, to_email, user_email,
+				search_text, type, status, is_del, create_time
+			)
+			SELECT
+				e.email_id,
+				e.user_id,
+				e.account_id,
+				COALESCE(e.name, ''),
+				COALESCE(e.subject, ''),
+				COALESCE(e.send_email, ''),
+				COALESCE(e.to_email, ''),
+				COALESCE(u.email, ''),
+				LOWER(
+					COALESCE(e.name, '') || ' ' ||
+					COALESCE(e.subject, '') || ' ' ||
+					COALESCE(e.send_email, '') || ' ' ||
+					COALESCE(e.to_email, '') || ' ' ||
+					COALESCE(u.email, '') || ' ' ||
+					COALESCE(e.text, '')
+				),
+				e.type,
+				e.status,
+				e.is_del,
+				e.create_time
+			FROM email e
+			LEFT JOIN user u ON u.user_id = e.user_id;`
 		];
 
 		await this.runOptionalSqlList(c, queryList);

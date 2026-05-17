@@ -41,6 +41,8 @@
             <div :class="'email-row ' + props.type"
                  :data-checked="item.checked"
                  @click="jumpDetails(item)"
+                 @mouseenter="preloadEmailDetail(item)"
+                 @focusin="preloadEmailDetail(item)"
                  v-if="!item.expand"
                  :key="item.emailId"
                  @contextmenu="handleContextmenu($event, item)"
@@ -240,7 +242,6 @@ import {computed, onActivated, reactive, ref, watch, nextTick, onMounted, onUnmo
 import {useEmailStore} from "@/store/email.js";
 import {useUiStore} from "@/store/ui.js";
 import {useSettingStore} from "@/store/setting.js";
-import {sleep} from "@/utils/time-utils.js"
 import {fromNow} from "@/utils/day.js";
 import {useI18n} from "vue-i18n";
 import {EmailUnreadEnum} from "@/enums/email-enum.js";
@@ -250,6 +251,7 @@ import {sanitizeHtml} from "@/utils/html-sanitize.js";
 
 const props = defineProps({
   getEmailList: Function,
+  getEmailDetail: Function,
   emailDelete: Function,
   emailRead: Function,
   starAdd: Function,
@@ -317,6 +319,9 @@ let scrollTop = 0
 const latestEmail = ref(null)
 const scrollbarRef = ref(null)
 let reqLock = false
+let listVersion = 0
+let prefetchedPage = null
+let prefetchingPage = null
 let isMobile = ref(innerWidth < 1367)
 let skeletonRows = 0
 const timePaddingRight = ref('');
@@ -333,6 +338,8 @@ const position = ref(
       y: 0,
     })
 )
+const detailCache = new Map();
+const DETAIL_CACHE_LIMIT = 100;
 
 const triggerRef = ref({
   getBoundingClientRect() {
@@ -487,12 +494,53 @@ window.addEventListener('wheel', (event) => {
   }
 })
 
-function openReply(email) {
-  uiStore.writerRef.openReply(email)
+async function openReply(email) {
+  uiStore.writerRef.openReply(await resolveEmailDetail(email))
 }
 
-function openForward(email) {
-  uiStore.writerRef.openForward(email)
+async function openForward(email) {
+  uiStore.writerRef.openForward(await resolveEmailDetail(email))
+}
+
+async function resolveEmailDetail(email) {
+  if (email.content || !props.getEmailDetail) {
+    return email;
+  }
+  const detail = await getCachedEmailDetail(email.emailId);
+  Object.assign(email, detail);
+  return email;
+}
+
+async function getCachedEmailDetail(emailId) {
+  if (detailCache.has(emailId)) {
+    return detailCache.get(emailId);
+  }
+
+  const promise = props.getEmailDetail(emailId).catch(error => {
+    detailCache.delete(emailId);
+    throw error;
+  });
+  detailCache.set(emailId, promise);
+  trimDetailCache();
+
+  const detail = await promise;
+  detailCache.set(emailId, detail);
+  trimDetailCache();
+  return detail;
+}
+
+function trimDetailCache() {
+  while (detailCache.size > DETAIL_CACHE_LIMIT) {
+    detailCache.delete(detailCache.keys().next().value);
+  }
+}
+
+function preloadEmailDetail(email) {
+  if (!props.getEmailDetail || !email?.emailId || email.content || detailCache.has(email.emailId)) {
+    return;
+  }
+
+  getCachedEmailDetail(email.emailId).catch(() => {});
 }
 
 function visibleChange(e) {
@@ -553,6 +601,14 @@ const accountShow = computed(() => {
 })
 
 function htmlToText(email) {
+  if (email.previewText) {
+    return cleanSpace(email.previewText)
+  }
+
+  if (email.text) {
+    return cleanSpace(email.text)
+  }
+
   if (email.content) {
 
     const tempDiv = document.createElement('div');
@@ -568,11 +624,7 @@ function htmlToText(email) {
     return cleanSpace(text)
   }
 
-  if (email.text) {
-    return cleanSpace(email.text)
-  } else {
-    return ''
-  }
+  return ''
 
 }
 
@@ -712,6 +764,7 @@ function handleDelete() {
 }
 
 function deleteEmail(emailIds) {
+  emailIds.forEach(emailId => detailCache.delete(emailId));
   emailIds.forEach(emailId => {
     emailList.forEach((item, index) => {
       if (emailId === item.emailId) {
@@ -813,6 +866,8 @@ function getEmailList(refresh = false) {
   if (reqLock) return;
 
   let emailId = emailList.length > 0 ? emailList.at(-1).emailId : 0;
+  const pageKey = getPageKey(emailId);
+  const usePrefetch = !refresh && prefetchedPage?.key === pageKey;
 
   reqLock = true
 
@@ -835,14 +890,18 @@ function getEmailList(refresh = false) {
   } else {
     followLoading.value = !refresh;
   }
-  let start = Date.now();
 
-  props.getEmailList(emailId, queryParam.size).then(async data => {
-    let end = Date.now();
-    let duration = end - start;
-    if (duration < 300 && !emailId) {
-        await sleep(300 - duration)
+  const requestVersion = listVersion;
+  const dataPromise = usePrefetch ? Promise.resolve(prefetchedPage.data) : props.getEmailList(emailId, queryParam.size);
+  if (usePrefetch) {
+    prefetchedPage = null;
+  }
+
+  dataPromise.then(async data => {
+    if (requestVersion !== listVersion) {
+      return;
     }
+
     firstLoad.value = false
 
     let list = data.list.map(item => ({
@@ -861,14 +920,46 @@ function getEmailList(refresh = false) {
     emailList.push(...list);
     if (refresh) scrollbarRef.value?.setScrollTop(0);
 
-    noLoading.value = data.list.length < queryParam.size;
-    followLoading.value = data.list.length >= queryParam.size;
+    noLoading.value = data.hasMore === false || data.list.length < queryParam.size;
+    followLoading.value = !noLoading.value;
 
     total.value = data.total;
+    prefetchNextPage(listVersion);
   }).finally(() => {
     loading.value = false
     reqLock = false
   })
+}
+
+function getPageKey(emailId) {
+  return [props.type, props.timeSort, emailId, queryParam.size].join(':');
+}
+
+function prefetchNextPage(version) {
+  if (noLoading.value || emailList.length === 0 || !props.getEmailList) {
+    return;
+  }
+
+  const nextEmailId = emailList.at(-1).emailId;
+  const key = getPageKey(nextEmailId);
+
+  if (prefetchedPage?.key === key || prefetchingPage === key) {
+    return;
+  }
+
+  prefetchingPage = key;
+  props.getEmailList(nextEmailId, queryParam.size)
+      .then(data => {
+        if (version === listVersion) {
+          prefetchedPage = { key, data };
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (prefetchingPage === key) {
+          prefetchingPage = null;
+        }
+      });
 }
 
 function handleList(list) {
@@ -905,6 +996,9 @@ function refresh() {
 function refreshList() {
   checkAll.value = false;
   isIndeterminate.value = false;
+  listVersion++;
+  prefetchedPage = null;
+  prefetchingPage = null;
   getEmailList(true);
 }
 

@@ -10,8 +10,46 @@ import user from '../entity/user';
 import verifyUtils from '../utils/verify-utils';
 import { t } from '../i18n/i18n.js';
 import emailUtils from '../utils/email-utils';
+import permService from './perm-service';
+
+const ROLE_CACHE_TTL = 30 * 1000;
+const roleCache = new Map();
+
+function getCache(key) {
+	const item = roleCache.get(key);
+	if (!item || item.expiresAt <= Date.now()) {
+		roleCache.delete(key);
+		return null;
+	}
+	return item.value;
+}
+
+function setCache(key, value) {
+	roleCache.set(key, {
+		value,
+		expiresAt: Date.now() + ROLE_CACHE_TTL
+	});
+	return value;
+}
+
+function clearRoleCache() {
+	roleCache.clear();
+	permService.clearCache();
+}
+
+function cloneRoleList(list) {
+	return list.map(item => ({
+		...item,
+		banEmail: Array.isArray(item.banEmail) ? [...item.banEmail] : item.banEmail,
+		availDomain: Array.isArray(item.availDomain) ? [...item.availDomain] : item.availDomain,
+		permIds: Array.isArray(item.permIds) ? [...item.permIds] : item.permIds
+	}));
+}
 
 const roleService = {
+	clearCache() {
+		clearRoleCache();
+	},
 
 	async add(c, params, userId) {
 
@@ -36,17 +74,23 @@ const roleService = {
 		roleRow = await orm(c).insert(role).values({...params, banEmail, availDomain, userId}).returning().get();
 
 		if (permIds.length === 0) {
+			clearRoleCache();
 			return;
 		}
 
 		const rolePermList = permIds.map(permId => ({ permId, roleId: roleRow.roleId }));
 
 		await orm(c).insert(rolePerm).values(rolePermList).run();
+		clearRoleCache();
 
 
 	},
 
 	async roleList(c) {
+		const cached = getCache('roleList');
+		if (cached) {
+			return cloneRoleList(cached);
+		}
 
 		const roleList = await orm(c).select().from(role).orderBy(asc(role.sort)).all();
 		const permList = await orm(c).select({ permId: perm.permId, roleId: rolePerm.roleId }).from(rolePerm)
@@ -59,7 +103,7 @@ const roleService = {
 			role.permIds = permList.filter(perm => perm.roleId === role.roleId).map(perm => perm.permId);
 		});
 
-		return roleList;
+		return cloneRoleList(setCache('roleList', roleList));
 	},
 
 	async setRole(c, params) {
@@ -89,6 +133,7 @@ const roleService = {
 			const rolePermList = permIds.map(permId => ({ permId, roleId: roleId }));
 			await orm(c).insert(rolePerm).values(rolePermList).run();
 		}
+		clearRoleCache();
 
 	},
 
@@ -112,15 +157,26 @@ const roleService = {
 
 		await orm(c).delete(rolePerm).where(eq(rolePerm.roleId, roleId)).run();
 		await orm(c).delete(role).where(eq(role.roleId, roleId)).run();
+		clearRoleCache();
 
 	},
 
-	roleSelectUse(c) {
-		return orm(c).select({ name: role.name, roleId: role.roleId, isDefault: role.isDefault }).from(role).orderBy(asc(role.sort)).all();
+	async roleSelectUse(c) {
+		const cached = getCache('roleSelectUse');
+		if (cached) {
+			return cached.map(item => ({ ...item }));
+		}
+		const rows = await orm(c).select({ name: role.name, roleId: role.roleId, isDefault: role.isDefault }).from(role).orderBy(asc(role.sort)).all();
+		return setCache('roleSelectUse', rows).map(item => ({ ...item }));
 	},
 
 	async selectDefaultRole(c) {
-		return await orm(c).select().from(role).where(eq(role.isDefault, roleConst.isDefault.OPEN)).get();
+		const cached = getCache('defaultRole');
+		if (cached) {
+			return { ...cached };
+		}
+		const row = await orm(c).select().from(role).where(eq(role.isDefault, roleConst.isDefault.OPEN)).get();
+		return row ? { ...setCache('defaultRole', row) } : row;
 	},
 
 	async setDefault(c, params) {
@@ -130,10 +186,17 @@ const roleService = {
 		}
 		await orm(c).update(role).set({ isDefault: 0 }).run();
 		await orm(c).update(role).set({ isDefault: 1 }).where(eq(role.roleId, params.roleId)).run();
+		clearRoleCache();
 	},
 
-	selectById(c, roleId) {
-		return orm(c).select().from(role).where(eq(role.roleId, roleId)).get();
+	async selectById(c, roleId) {
+		const cacheKey = `role:${roleId}`;
+		const cached = getCache(cacheKey);
+		if (cached) {
+			return { ...cached };
+		}
+		const row = await orm(c).select().from(role).where(eq(role.roleId, roleId)).get();
+		return row ? { ...setCache(cacheKey, row) } : row;
 	},
 
 	selectByIdsHasPermKey(c, types, permKey) {
@@ -150,8 +213,14 @@ const roleService = {
 			.where(and(eq(perm.permKey, permKey), eq(role.sendType, sendType))).all();
 	},
 
-	selectByUserId(c, userId) {
-		return orm(c).select(role).from(user).leftJoin(role, eq(role.roleId, user.type)).where(eq(user.userId, userId)).get();
+	async selectByUserId(c, userId) {
+		const cacheKey = `userRole:${userId}`;
+		const cached = getCache(cacheKey);
+		if (cached) {
+			return { ...cached };
+		}
+		const row = await orm(c).select(role).from(user).leftJoin(role, eq(role.roleId, user.type)).where(eq(user.userId, userId)).get();
+		return row ? { ...setCache(cacheKey, row) } : row;
 	},
 
 	hasAvailDomainPerm(availDomain, email) {
@@ -177,7 +246,7 @@ const roleService = {
 
 	selectByUserIds(c, userIds) {
 
-		if (!userIds && userIds.length === 0) {
+		if (!userIds || userIds.length === 0) {
 			return [];
 		}
 

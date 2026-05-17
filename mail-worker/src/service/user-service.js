@@ -283,6 +283,7 @@ const userService = {
 			.set({ type })
 			.where(eq(user.userId, userId))
 			.run();
+		roleService.clearCache();
 
 	},
 
@@ -300,6 +301,7 @@ const userService = {
 			.set({ type })
 			.where(eq(user.type, curType))
 			.run();
+		roleService.clearCache();
 	},
 
 	async add(c, params) {
@@ -324,7 +326,7 @@ const userService = {
 			throw new BizError(t('isRegAccount'));
 		}
 
-		const role = roleService.selectById(c, type);
+		const role = await roleService.selectById(c, type);
 
 		if (!role) {
 			throw new BizError(t('roleNotExist'));
