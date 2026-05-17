@@ -246,6 +246,7 @@ import {useI18n} from "vue-i18n";
 import {EmailUnreadEnum} from "@/enums/email-enum.js";
 import { UseVirtualList } from '@vueuse/components'
 import { useScroll } from '@vueuse/core'
+import {sanitizeHtml} from "@/utils/html-sanitize.js";
 
 const props = defineProps({
   getEmailList: Function,
@@ -556,7 +557,7 @@ function htmlToText(email) {
 
     const tempDiv = document.createElement('div');
 
-    tempDiv.innerHTML = email.content.replace(
+    tempDiv.innerHTML = sanitizeHtml(email.content).replace(
         /<(img|iframe|object|embed|video|audio|source|link)[^>]*>/gi, ''
     );
 

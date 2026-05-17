@@ -79,7 +79,7 @@ const jwtUtils = {
 			return payload;
 
 		} catch (err) {
-			console.log(err)
+			console.warn(err)
 			return null;
 		}
 	}

@@ -33,6 +33,8 @@ jobs:
       LINUXDO_CLIENT_SECRET: ${{ secrets.LINUXDO_CLIENT_SECRET || vars.LINUXDO_CLIENT_SECRET }}
       LINUXDO_CALLBACK_URL: ${{ secrets.LINUXDO_CALLBACK_URL || vars.LINUXDO_CALLBACK_URL }}
       LINUXDO_SWITCH: ${{ secrets.LINUXDO_SWITCH || vars.LINUXDO_SWITCH }}
+      CORS_ORIGINS: ${{ secrets.CORS_ORIGINS || vars.CORS_ORIGINS }}
+      RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET || vars.RESEND_WEBHOOK_SECRET }}
 
 
     outputs:
@@ -138,6 +140,8 @@ jobs:
           sed -i "s|\${LINUXDO_CLIENT_SECRET}|${LINUXDO_CLIENT_SECRET}|g" "$CONFIG_FILE"
           sed -i "s|\${LINUXDO_CALLBACK_URL}|${LINUXDO_CALLBACK_URL}|g" "$CONFIG_FILE"
           sed -i "s|\${LINUXDO_SWITCH}|${LINUXDO_SWITCH}|g" "$CONFIG_FILE"
+          sed -i "s|\${CORS_ORIGINS}|${CORS_ORIGINS}|g" "$CONFIG_FILE"
+          sed -i "s|\${RESEND_WEBHOOK_SECRET}|${RESEND_WEBHOOK_SECRET}|g" "$CONFIG_FILE"
           
           echo "✅ Environment setup completed."
 

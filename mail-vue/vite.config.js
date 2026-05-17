@@ -55,7 +55,30 @@ export default defineConfig(({mode}) => {
             target: 'es2022',
             outDir: env.VITE_OUT_DIR || 'dist',
             emptyOutDir: true,
-            assetsInclude: ['**/*.json']
+            assetsInclude: ['**/*.json'],
+            rollupOptions: {
+                output: {
+                    manualChunks(id) {
+                        if (!id.includes('node_modules')) return;
+                        if (id.includes('element-plus/es/components/')) {
+                            const component = id.split('element-plus/es/components/')[1]?.split('/')[0];
+                            return component ? `element-plus-${component}` : 'element-plus-components';
+                        }
+                        if (id.includes('@element-plus/icons-vue')) return 'element-plus-icons';
+                        if (id.includes('element-plus')) return 'element-plus-core';
+                        if (id.includes('echarts')) return 'echarts';
+                        if (id.includes('dexie')) return 'dexie';
+                        if (id.includes('@iconify')) return 'iconify';
+                        if (id.includes('@vueuse')) return 'vueuse';
+                        if (id.includes('vue-router')) return 'vue-router';
+                        if (id.includes('vue-i18n')) return 'vue-i18n';
+                        if (id.includes('pinia')) return 'pinia';
+                        if (id.includes('vue')) return 'vue-core';
+                        if (id.includes('lodash')) return 'lodash';
+                        return 'vendor';
+                    }
+                }
+            }
         }
     }
 })

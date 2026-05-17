@@ -225,11 +225,9 @@ window.onTurnstileError = (e) => {
 };
 
 window.loadAfter = (e) => {
-  console.log('loadAfter')
 }
 
 window.loadBefore = (e) => {
-  console.log('loadBefore')
 }
 
 const loginOpacity = computed(() => {
@@ -442,8 +440,6 @@ function submitRegister() {
     return
   }
 
-  console.log(registerForm.email)
-
   if (getEmailName(registerForm.email).length < settingStore.settings.minEmailPrefix) {
     ElMessage({
       message: t('minEmailPrefix', {msg: settingStore.settings.minEmailPrefix}),
@@ -515,7 +511,7 @@ function submitRegister() {
             turnstileId = window.turnstile.render('.register-turnstile')
           } catch (e) {
             botJsError.value = true
-            console.log('人机验证js加载失败')
+            console.warn('人机验证js加载失败')
           }
         } else {
           window.turnstile.reset('.register-turnstile')

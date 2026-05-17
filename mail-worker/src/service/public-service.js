@@ -45,6 +45,15 @@ const publicService = {
 
 		size = Number(size);
 		num = Number(num);
+		if (!Number.isInteger(size) || size < 1) {
+			size = 20;
+		}
+		if (size > 50) {
+			size = 50;
+		}
+		if (!Number.isInteger(num) || num < 1) {
+			num = 1;
+		}
 
 		num = (num - 1) * size;
 
@@ -97,15 +106,31 @@ const publicService = {
 	async addUser(c, params) {
 		const { list } = params;
 
+		if (!Array.isArray(list)) {
+			throw new BizError('list must be an array');
+		}
+
 		if (list.length === 0) return;
 
+		if (list.length > 100) {
+			throw new BizError('A maximum of 100 users can be imported at once');
+		}
+
 		for (const emailRow of list) {
+			if (!emailRow || typeof emailRow !== 'object') {
+				throw new BizError('list item must be an object');
+			}
+
 			if (!verifyUtils.isEmail(emailRow.email)) {
 				throw new BizError(t('notEmail'));
 			}
 
 			if (!c.env.domain.includes(emailUtils.getDomain(emailRow.email))) {
 				throw new BizError(t('notEmailDomain'));
+			}
+
+			if (emailRow.password && (emailRow.password.length < 6 || emailRow.password.length > 30)) {
+				throw new BizError(t(emailRow.password.length < 6 ? 'pwdMinLength' : 'pwdLengthLimit'));
 			}
 
 			const { salt, hash } = await saltHashUtils.hashPassword(
@@ -135,14 +160,14 @@ const publicService = {
 				type = roleRow ? roleRow.roleId : type;
 			}
 
-			const userSql = `INSERT INTO user (email, password, salt, type, os, browser, active_ip, create_ip, device, active_time, create_time)
-			VALUES ('${email}', '${hash}', '${salt}', '${type}', '${os}', '${browser}', '${activeIp}', '${activeIp}', '${device}', '${activeTime}', '${activeTime}')`
-
-			const accountSql = `INSERT INTO account (email, name, user_id)
-			VALUES ('${email}', '${emailUtils.getName(email)}', 0);`;
-
-			userList.push(c.env.db.prepare(userSql));
-			userList.push(c.env.db.prepare(accountSql));
+			userList.push(c.env.db.prepare(`
+				INSERT INTO user (email, password, salt, type, os, browser, active_ip, create_ip, device, active_time, create_time)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`).bind(email, hash, salt, type, os, browser, activeIp, activeIp, device, activeTime, activeTime));
+			userList.push(c.env.db.prepare(`
+				INSERT INTO account (email, name, user_id)
+				VALUES (?, ?, 0)
+			`).bind(email, emailUtils.getName(email)));
 
 		}
 

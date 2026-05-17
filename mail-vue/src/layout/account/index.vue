@@ -463,7 +463,7 @@ function submit() {
             turnstileId = window.turnstile.render('.add-email-turnstile')
           } catch (e) {
             botJsError.value = true
-            console.log('人机验证js加载失败')
+            console.warn('人机验证js加载失败')
           }
         } else {
           window.turnstile.reset('.add-email-turnstile')

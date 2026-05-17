@@ -16,6 +16,7 @@ import {useSettingStore} from "@/store/setting.js";
 import {computed, onBeforeUnmount, onMounted, watch} from "vue";
 import { useRoute } from 'vue-router'
 import { hasPerm } from "@/perm/perm.js"
+import {sanitizeHtml} from "@/utils/html-sanitize.js";
 
 const settingStore = useSettingStore()
 const uiStore = useUiStore();
@@ -65,7 +66,7 @@ function showNotice(data) {
 
   elNotification = ElNotification({
     title: data.noticeTitle,
-    message: `<div style="width: 100%;height: 100%;white-space: pre;word-break: normal;overflow-x: auto;">${data.noticeContent}</div>`,
+    message: `<div style="width: 100%;height: 100%;white-space: pre;word-break: normal;overflow-x: auto;">${sanitizeHtml(data.noticeContent)}</div>`,
     type: data.noticeType === 'none' ? '' : data.noticeType,
     duration: data.noticeDuration,
     position: data.noticePosition,

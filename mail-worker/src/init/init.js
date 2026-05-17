@@ -1,13 +1,14 @@
 import settingService from '../service/setting-service';
 import emailUtils from '../utils/email-utils';
 import {emailConst} from "../const/entity-const";
+import secretUtils from '../utils/secret-utils';
 
 const dbInit = {
 	async init(c) {
 
 		const secret = c.req.param('secret');
 
-		if (secret !== c.env.jwt_secret) {
+		if (!await secretUtils.timingSafeEqual(secret, c.env.jwt_secret)) {
 			return c.text('❌ JWT secret mismatch');
 		}
 
@@ -43,6 +44,11 @@ const dbInit = {
 			`ALTER TABLE setting ADD COLUMN black_from TEXT NOT NULL DEFAULT '';`
 		];
 
+		await this.runOptionalSqlList(c, queryList);
+
+	},
+
+	async runOptionalSqlList(c, queryList) {
 		for (const query of queryList) {
 			try {
 				await c.env.db.prepare(query).run();
@@ -50,7 +56,6 @@ const dbInit = {
 				console.warn(`Skip migration SQL: ${e.message}`);
 			}
 		}
-
 	},
 
 	async v2_9DB(c) {
