@@ -22,10 +22,46 @@ describe('ai service code extraction', () => {
 		expect(code).toBe('123456');
 	});
 
+	it('extracts alphanumeric verification codes near an explicit code label', () => {
+		const code = extractCodeByPattern({
+			subject: 'Your sign-in verification code',
+			text: 'Enter verification code AB12CD to continue.'
+		});
+
+		expect(code).toBe('AB12CD');
+	});
+
 	it('does not extract unrelated numbers without a verification hint', () => {
 		const code = extractCodeByPattern({
 			subject: 'Your invoice is ready',
 			text: 'Invoice 20260518 total is 19.99.'
+		});
+
+		expect(code).toBe('');
+	});
+
+	it('does not extract dates or browser versions from login security notices', () => {
+		const code = extractCodeByPattern({
+			subject: 'Security alert: new login from Windows',
+			text: 'We noticed a sign-in from IP 192.168.1.18 on 2026-05-18 using Chrome 126.0.0.1. If this was you, ignore this email.'
+		});
+
+		expect(code).toBe('');
+	});
+
+	it('does not extract reference or order ids as verification codes', () => {
+		const code = extractCodeByPattern({
+			subject: 'Your security settings changed',
+			text: 'Reference ID: AB12CD34. If this was you, no further action is required.'
+		});
+
+		expect(code).toBe('');
+	});
+
+	it('does not extract generic promo codes', () => {
+		const code = extractCodeByPattern({
+			subject: 'Weekend discount',
+			text: 'Use promo code AB12CD at checkout before Monday.'
 		});
 
 		expect(code).toBe('');
