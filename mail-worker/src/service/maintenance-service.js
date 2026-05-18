@@ -103,7 +103,7 @@ const maintenanceService = {
 
 		if (dbAvailable) {
 			const start = Date.now();
-			const [columnRows, indexRows, emailCount, searchTable, searchCount, queryPlan] = await Promise.all([
+			const [columnRows, indexRows, searchTable, emailCount, searchCount, queryPlan] = await Promise.all([
 				c.env.db.prepare(`PRAGMA table_info(email)`).all(),
 				c.env.db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all(),
 				c.env.db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'email_search'`).first(),

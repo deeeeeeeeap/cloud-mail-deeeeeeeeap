@@ -31,6 +31,52 @@ describe('maintenance service', () => {
 		expect(JSON.stringify(result)).not.toMatch(/token|secret|password/i);
 	});
 
+	it('keeps health usable when the search table has not been created yet', async () => {
+		const c = {
+			env: {
+				db: {
+					prepare(sql) {
+						return {
+							bind() {
+								return this;
+							},
+							async all() {
+								if (sql.includes('PRAGMA table_info(email)')) {
+									return { results: [{ name: 'email_id' }] };
+								}
+								if (sql.includes("type = 'index'")) {
+									return { results: [] };
+								}
+								if (sql.includes('EXPLAIN QUERY PLAN')) {
+									return { results: [] };
+								}
+								return { results: [] };
+							},
+							async first() {
+								if (sql.includes("name = 'email_search'")) {
+									return null;
+								}
+								if (sql.includes('COUNT(*) AS total FROM email_search')) {
+									throw new Error('no such table: email_search');
+								}
+								if (sql.includes('COUNT(*) AS total FROM email')) {
+									return { total: 7 };
+								}
+								return null;
+							}
+						};
+					}
+				}
+			}
+		};
+
+		const result = await maintenanceService.health(c);
+
+		expect(result.details.emailTotal).toBe(7);
+		expect(result.details.emailSearchRows).toBe(0);
+		expect(result.checks.find(item => item.key === 'emailSearch').ok).toBe(false);
+	});
+
 	it('rejects repair requests when D1 is not configured', async () => {
 		await expect(maintenanceService.repair({ env: {} }, 'indexes')).rejects.toThrow('D1 binding is missing');
 	});
