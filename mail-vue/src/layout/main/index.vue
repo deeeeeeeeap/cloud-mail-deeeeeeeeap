@@ -164,22 +164,29 @@ const handleResize = () => {
 
 .main-box-show {
   display: grid;
-  grid-template-columns: 260px  1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
   height: calc(100% - 60px);
+  min-width: 0;
+  overflow: hidden;
   @media (max-width: 767px) {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 .main-box-hide {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   height: calc(100% - 60px);
+  min-width: 0;
+  overflow: hidden;
 }
 
 
 .main-view {
   background: var(--el-bg-color);
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
 }
 
 

@@ -90,14 +90,18 @@ onBeforeUnmount(() => {
 }
 
 .main-container {
+  min-width: 0;
   min-height: 100%;
   background: var(--el-bg-color);
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
 .el-main {
   padding: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .el-header {

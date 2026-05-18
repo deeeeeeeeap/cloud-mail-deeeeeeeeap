@@ -32,7 +32,7 @@
 
       <div class="panel">
         <div class="panel-title">{{ $t('healthIssues') }}</div>
-        <el-table :data="health.checks || []" style="width: 100%">
+        <el-table :data="health.checks || []" table-layout="fixed" style="width: 100%">
           <el-table-column :label="$t('tabStatus')" width="90">
             <template #default="props">
               <el-tag :type="props.row.ok ? 'success' : 'danger'">
@@ -151,20 +151,27 @@ refresh()
 
 .scrollbar {
   height: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
   background: var(--extra-light-fill);
 }
 
 .maintenance {
+  width: 100%;
+  max-width: 100%;
   min-height: 100%;
-  padding: 20px 20px 30px;
+  padding: 14px 16px 22px;
+  box-sizing: border-box;
   display: grid;
   grid-auto-rows: min-content;
-  gap: 20px;
+  gap: 14px;
+  overflow-x: hidden;
   background: var(--extra-light-fill);
 
   @media (max-width: 1024px) {
-    padding: 15px 15px 30px;
-    gap: 15px;
+    padding: 12px 12px 22px;
+    gap: 12px;
   }
 }
 
@@ -173,21 +180,29 @@ refresh()
   align-items: center;
   gap: 12px;
   color: var(--el-text-color-secondary);
+  min-width: 0;
 
   .icon {
+    flex-shrink: 0;
     cursor: pointer;
     color: var(--el-text-color-primary);
+  }
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 }
 
 .number {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
 
   @media (max-width: 1366px) {
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
+    gap: 12px;
   }
 
   @media (max-width: 767px) {
@@ -200,21 +215,24 @@ refresh()
   background: var(--el-bg-color);
   border-radius: 8px;
   border: 1px solid var(--el-border-color);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .number-item {
-  padding: 21px 20px;
+  padding: 15px 18px;
 
   .top {
     display: grid;
     justify-content: space-between;
     align-content: center;
-    grid-template-columns: auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .left {
     display: grid;
-    gap: 8px;
+    gap: 7px;
+    min-width: 0;
   }
 
   .right {
@@ -227,14 +245,14 @@ refresh()
     position: relative;
     display: grid;
     align-items: center;
-    padding: 14px;
+    padding: 12px;
     border-radius: 8px;
     background: var(--el-color-primary-light-9);
     color: var(--el-color-primary);
   }
 
   .desc {
-    padding-top: 12px;
+    padding-top: 10px;
     color: var(--el-text-color-secondary);
     font-size: 13px;
     overflow: hidden;
@@ -244,13 +262,13 @@ refresh()
 }
 
 .panel {
-  padding: 16px;
+  padding: 14px 16px;
 }
 
 .panel-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 500;
-  padding-bottom: 14px;
+  padding-bottom: 12px;
 }
 
 .repair-actions {
@@ -267,5 +285,39 @@ refresh()
   color: var(--el-text-color-secondary);
   font-size: 13px;
   word-break: break-all;
+}
+
+:deep(.el-table .cell) {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+:deep(.el-table),
+:deep(.el-table__inner-wrapper),
+:deep(.el-table__body-wrapper),
+:deep(.el-scrollbar__view) {
+  max-width: 100%;
+}
+
+:deep(.el-scrollbar__wrap) {
+  overflow-x: hidden !important;
+}
+
+:deep(.el-descriptions),
+:deep(.el-descriptions__body),
+:deep(.el-descriptions__table) {
+  width: 100%;
+  max-width: 100%;
+}
+
+:deep(.el-descriptions__content) {
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+:deep(.el-descriptions__label) {
+  width: 145px;
 }
 </style>

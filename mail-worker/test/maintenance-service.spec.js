@@ -120,6 +120,11 @@ describe('maintenance service', () => {
 		await maintenanceService.repair(c, 'indexes');
 
 		const sqlList = dbInit.runOptionalSqlList.mock.calls[0][1].join('\n');
+		expect(sqlList).toContain('idx_email_user_account_type_del_id');
+		expect(sqlList).toContain('idx_email_user_type_del_id');
+		expect(sqlList).toContain('idx_email_type_status_id');
+		expect(sqlList).toContain('idx_attachments_email_type');
+		expect(sqlList).toContain('idx_star_user_email');
 		expect(sqlList).toContain('idx_email_user_code_id');
 		expect(sqlList).toContain('idx_email_code_id');
 	});

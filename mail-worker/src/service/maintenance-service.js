@@ -31,7 +31,12 @@ const EXPECTED_INDEXES = [
 	'idx_email_code_id'
 ];
 
-const CODE_INDEX_SQL_LIST = [
+const INDEX_SQL_LIST = [
+	`CREATE INDEX IF NOT EXISTS idx_email_user_account_type_del_id ON email(user_id, account_id, type, is_del, email_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_email_user_type_del_id ON email(user_id, type, is_del, email_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_email_type_status_id ON email(type, status, email_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_attachments_email_type ON attachments(email_id, type);`,
+	`CREATE INDEX IF NOT EXISTS idx_star_user_email ON star(user_id, email_id);`,
 	`CREATE INDEX IF NOT EXISTS idx_email_user_code_id ON email(user_id, code, email_id);`,
 	`CREATE INDEX IF NOT EXISTS idx_email_code_id ON email(code, email_id);`
 ];
@@ -200,7 +205,7 @@ const maintenanceService = {
 		}
 
 		if (action === 'indexes') {
-			await dbInit.runOptionalSqlList(c, CODE_INDEX_SQL_LIST);
+			await dbInit.runOptionalSqlList(c, INDEX_SQL_LIST);
 			return this.health(c);
 		}
 
