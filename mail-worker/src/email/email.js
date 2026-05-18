@@ -92,6 +92,7 @@ export async function email(message, env, ctx) {
 		}
 
 		const toName = email.to.find(item => item.address === message.to)?.name || '';
+		const patternCode = aiService.extractCodeByPattern(email);
 		const shouldExtractCode = aiService.shouldExtractCode(aiCode, aiCodeFilter, email);
 
 		const params = {
@@ -100,7 +101,7 @@ export async function email(message, env, ctx) {
 			sendEmail: email.from.address,
 			name: email.from.name || emailUtils.getName(email.from.address),
 			subject: email.subject,
-			code: '',
+			code: patternCode,
 			content: email.html,
 			text: email.text,
 			cc: email.cc ? JSON.stringify(email.cc) : '[]',
@@ -146,7 +147,7 @@ export async function email(message, env, ctx) {
 
 		emailRow = await emailService.completeReceive({ env }, account ? emailConst.status.RECEIVE : emailConst.status.NOONE, emailRow.emailId);
 
-		if (shouldExtractCode) {
+		if (shouldExtractCode && !patternCode) {
 			const codeTask = (async () => {
 				const code = await aiService.extractCode({ env }, email, { aiCode, aiCodeFilter });
 				if (code) {
