@@ -51,6 +51,16 @@ const routes = [
                     menu: true
                 }
             },
+            {
+                path: '/codes',
+                name: 'code-center',
+                component: () => import('@/views/code-center/index.vue'),
+                meta: {
+                    title: 'codeCenter',
+                    name: 'code-center',
+                    menu: true
+                }
+            },
         ]
 
     },

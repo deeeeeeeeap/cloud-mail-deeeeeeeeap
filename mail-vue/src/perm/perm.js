@@ -118,5 +118,15 @@ const routers = {
             name: 'analysis',
             menu: true
         }
+    }],
+    'maintenance:query': [{
+        path: '/maintenance',
+        name: 'maintenance',
+        component: () => import('@/views/maintenance/index.vue'),
+        meta: {
+            title: 'maintenance',
+            name: 'maintenance',
+            menu: true
+        }
     }]
 }

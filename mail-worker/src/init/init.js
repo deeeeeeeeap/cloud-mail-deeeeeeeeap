@@ -47,6 +47,8 @@ const dbInit = {
 			`CREATE INDEX IF NOT EXISTS idx_email_type_status_id ON email(type, status, email_id);`,
 			`CREATE INDEX IF NOT EXISTS idx_attachments_email_type ON attachments(email_id, type);`,
 			`CREATE INDEX IF NOT EXISTS idx_star_user_email ON star(user_id, email_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_email_user_code_id ON email(user_id, code, email_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_email_code_id ON email(code, email_id);`,
 			`CREATE TABLE IF NOT EXISTS email_search (
 				email_id INTEGER PRIMARY KEY,
 				user_id INTEGER NOT NULL DEFAULT 0,
@@ -91,7 +93,13 @@ const dbInit = {
 				e.is_del,
 				e.create_time
 			FROM email e
-			LEFT JOIN user u ON u.user_id = e.user_id;`
+			LEFT JOIN user u ON u.user_id = e.user_id;`,
+			`INSERT INTO perm (name, perm_key, pid, type, sort)
+			SELECT 'Maintenance Query', 'maintenance:query', 17, 2, 2
+			WHERE NOT EXISTS (SELECT 1 FROM perm WHERE perm_key = 'maintenance:query');`,
+			`INSERT INTO perm (name, perm_key, pid, type, sort)
+			SELECT 'Maintenance Repair', 'maintenance:repair', 17, 2, 3
+			WHERE NOT EXISTS (SELECT 1 FROM perm WHERE perm_key = 'maintenance:repair');`
 		];
 
 		await this.runOptionalSqlList(c, queryList);

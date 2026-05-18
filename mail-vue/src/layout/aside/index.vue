@@ -26,12 +26,17 @@
           <Icon icon="solar:star-line-duotone" width="20" height="20" />
           <span class="menu-name" style="margin-left: 21px">{{$t('starred')}}</span>
         </el-menu-item>
+        <el-menu-item @click="router.push({name: 'code-center'})" index="code-center"
+                      :class="route.meta.name === 'code-center' ? 'choose-item' : ''">
+          <Icon icon="fluent:password-20-regular" width="21" height="21" />
+          <span class="menu-name" style="margin-left: 20px">{{$t('codeCenter')}}</span>
+        </el-menu-item>
         <el-menu-item @click="router.push({name: 'setting'})" index="setting"
                       :class="route.meta.name === 'setting' ? 'choose-item' : ''">
           <Icon icon="fluent:settings-48-regular" width="20" height="20" />
           <span class="menu-name" style="margin-left: 21px">{{$t('settings')}}</span>
         </el-menu-item>
-        <div class="manage-title" v-perm="['all-email:query','user:query','role:query','setting:query','analysis:query','reg-key:query']">
+        <div class="manage-title" v-perm="['all-email:query','user:query','role:query','setting:query','analysis:query','reg-key:query','maintenance:query']">
           <div>{{$t('manage')}}</div>
         </div>
         <el-menu-item @click="router.push({name: 'analysis'})" index="analysis" v-perm="'analysis:query'"
@@ -63,6 +68,11 @@
                       :class="route.meta.name === 'sys-setting' ? 'choose-item' : ''">
           <Icon icon="eos-icons:system-ok-outlined" width="18" height="18" style="margin-left: 2px" />
           <span class="menu-name" style="margin-left: 22px">{{$t('SystemSettings')}}</span>
+        </el-menu-item>
+        <el-menu-item @click="router.push({name: 'maintenance'})" index="maintenance" v-perm="'maintenance:query'"
+                      :class="route.meta.name === 'maintenance' ? 'choose-item' : ''">
+          <Icon icon="fluent:toolbox-20-regular" width="21" height="21" />
+          <span class="menu-name" style="margin-left: 20px">{{$t('maintenance')}}</span>
         </el-menu-item>
       </el-menu>
     </div>
