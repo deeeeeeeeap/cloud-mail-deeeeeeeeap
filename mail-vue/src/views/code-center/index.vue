@@ -25,7 +25,7 @@
         <Loading/>
       </div>
       <div class="code-box">
-        <div class="code-item" :class="item.isStale ? 'stale' : ''" v-for="item in codes" :key="`${scope}-${item.emailId}`" @click="openDetail(item)">
+        <div class="code-item" :class="item.isStale ? 'stale' : ''" v-for="item in codes" :key="`${scope}-${item.emailId}`" @click="copyCode(item.code)">
           <div class="code-info">
             <div class="info-left">
               <div class="info-left-item">
@@ -40,15 +40,7 @@
               <div class="info-left-item time">{{ displayTime(item.createTime) }}</div>
             </div>
             <div class="info-right">
-              <el-dropdown class="setting">
-                <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"/>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item @click.stop="copyCode(item.code)">{{ $t('copyCode') }}</el-dropdown-item>
-                    <el-dropdown-item @click.stop="openDetail(item)">{{ $t('details') }}</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
+              <el-button class="detail-button" text @click.stop="openDetail(item)">{{ $t('details') }}</el-button>
             </div>
           </div>
         </div>
@@ -290,8 +282,18 @@ getList(true)
   }
 }
 
-.setting {
-  cursor: pointer;
+.info-right {
+  flex-shrink: 0;
+  padding-left: 10px;
+}
+
+.detail-button {
+  padding: 2px 4px;
+  color: var(--el-text-color-secondary);
+
+  &:hover {
+    color: var(--el-color-primary);
+  }
 }
 
 .load-more {
