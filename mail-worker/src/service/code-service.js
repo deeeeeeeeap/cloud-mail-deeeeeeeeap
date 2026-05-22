@@ -99,7 +99,7 @@ async function backfillRecentCodes(c, userId) {
 		`e.type = ?`,
 		`e.status != ?`,
 		`e.is_del = ?`,
-		`datetime(e.create_time) >= datetime('now', '-2 days')`
+		`datetime(e.create_time) >= datetime('now', '-${CODE_STALE_MINUTES} minutes')`
 	];
 	const binds = [emailConst.type.RECEIVE, emailConst.status.SAVING, isDel.NORMAL];
 

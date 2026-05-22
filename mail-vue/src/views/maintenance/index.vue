@@ -77,7 +77,7 @@
         </div>
         <el-empty v-else :description="$t('unauthorized')" :image-size="80"/>
         <div v-if="health.lastAction" class="action-result">
-          {{ $t('codeMaintenanceResult', health.lastAction) }}
+          {{ actionResultText(health.lastAction) }}
         </div>
       </div>
 
@@ -146,7 +146,7 @@ function repair(action) {
     repairing.value = action
     maintenanceRepair(action).then(data => {
       health.value = data
-      ElMessage({message: t('repairSuccess'), type: 'success'})
+      ElMessage({message: actionResultText(data.lastAction) || t('repairSuccess'), type: 'success'})
     }).finally(() => {
       repairing.value = ''
     })
@@ -161,6 +161,17 @@ function repairConfirmText(action) {
     return t('codeMaintenanceConfirm')
   }
   return t('repairConfirm')
+}
+
+function actionResultText(result) {
+  if (!result) return ''
+  if (result.action === 'codes-clear-stale') {
+    return t('clearStaleCodesResult', result)
+  }
+  if (result.action === 'codes-rescan' || result.action === 'codes-clean') {
+    return t('codeMaintenanceResult', result)
+  }
+  return ''
 }
 
 function joinList(list) {

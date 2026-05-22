@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import codeService from '../src/service/code-service';
+import codeService, { CODE_STALE_MINUTES } from '../src/service/code-service';
 import emailSearchService from '../src/service/email-search-service';
 
 function createDbRecorder(resultsList = []) {
@@ -79,6 +79,8 @@ describe('code service', () => {
 
 		await codeService.list(c, { stale: 'fresh', size: 10, emailId: 0, timeSort: 0 }, 1);
 
+		const backfillStatement = recorder.statements.find(item => item.sql.includes('e.code ='));
+		expect(backfillStatement.sql).toContain(`datetime(e.create_time) >= datetime('now', '-${CODE_STALE_MINUTES} minutes')`);
 		const updateStatement = recorder.statements.find(item => item.sql.includes('UPDATE email SET code'));
 		expect(updateStatement.bindings).toEqual(['922951', 772]);
 		expect(syncSpy).toHaveBeenCalledWith(c, [772]);

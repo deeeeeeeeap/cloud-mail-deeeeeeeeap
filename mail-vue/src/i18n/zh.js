@@ -31,6 +31,7 @@ const zh = {
     codeMaintenanceConfirm: '该操作会按当前本地规则重新写入验证码字段，用于补回漏识别和清理误判。确认继续？',
     clearStaleCodesConfirm: '该操作会清空全站已过期的验证码字段，但不会删除真实邮件。确认继续？',
     codeMaintenanceResult: '扫描 {scanned} 封，更新 {updated} 条，补回 {backfilled} 条，清理 {cleared} 条',
+    clearStaleCodesResult: '已清除 {cleared} 条过期验证码',
     item: '项目',
     myCodes: '我的验证码',
     allCodes: '全站验证码',

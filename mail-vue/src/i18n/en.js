@@ -31,6 +31,7 @@ const en = {
     codeMaintenanceConfirm: 'This will rewrite code fields using the current local rules to recover missed codes and clean false positives. Continue?',
     clearStaleCodesConfirm: 'This will clear all expired site-wide code fields, but will not delete real emails. Continue?',
     codeMaintenanceResult: 'Scanned {scanned}, updated {updated}, backfilled {backfilled}, cleared {cleared}',
+    clearStaleCodesResult: 'Cleared {cleared} expired codes',
     item: 'Item',
     myCodes: 'My Codes',
     allCodes: 'All Codes',
