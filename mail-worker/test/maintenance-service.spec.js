@@ -17,6 +17,43 @@ const { dbInit } = await import('../src/init/init');
 const { default: emailSearchService } = await import('../src/service/email-search-service');
 const { default: maintenanceService } = await import('../src/service/maintenance-service');
 
+function createMaintenanceDb(selectBatches = []) {
+	const statements = [];
+	const batched = [];
+	const queue = [...selectBatches];
+	return {
+		statements,
+		batched,
+		db: {
+			prepare(sql) {
+				const statement = {
+					sql,
+					bindings: [],
+					bind(...args) {
+						this.bindings = args;
+						return this;
+					},
+					async all() {
+						if (sql.includes('FROM email')) {
+							return { results: queue.length > 0 ? queue.shift() : [] };
+						}
+						return { results: [] };
+					},
+					async run() {
+						return { success: true };
+					}
+				};
+				statements.push(statement);
+				return statement;
+			},
+			async batch(items) {
+				batched.push(...items);
+				return items.map(() => ({ success: true }));
+			}
+		}
+	};
+}
+
 describe('maintenance service', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -127,5 +164,94 @@ describe('maintenance service', () => {
 		expect(sqlList).toContain('idx_star_user_email');
 		expect(sqlList).toContain('idx_email_user_code_id');
 		expect(sqlList).toContain('idx_email_code_id');
+	});
+
+	it('cleans false positive verification codes by rescanning existing code rows', async () => {
+		const recorder = createMaintenanceDb([
+			[
+				{
+					emailId: 1,
+					code: '20260518',
+					subject: 'Security alert: new login from Windows',
+					text: 'We noticed a sign-in from IP 192.168.1.18 on 2026-05-18 using Chrome 126.0.0.1.',
+					html: ''
+				},
+				{
+					emailId: 2,
+					code: '922951',
+					subject: 'Your login code',
+					text: '922951',
+					html: ''
+				}
+			],
+			[]
+		]);
+		const c = { env: { db: recorder.db } };
+		vi.spyOn(maintenanceService, 'health').mockResolvedValue({ ok: true });
+
+		const result = await maintenanceService.repair(c, 'codes-clean');
+
+		expect(result.lastAction).toMatchObject({
+			action: 'codes-clean',
+			scanned: 2,
+			updated: 1,
+			cleared: 1,
+			backfilled: 0
+		});
+		expect(recorder.batched).toHaveLength(1);
+		expect(recorder.batched[0].bindings).toEqual(['', 1]);
+		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [1]);
+	});
+
+	it('rescans all received emails and backfills missed alphanumeric codes', async () => {
+		const recorder = createMaintenanceDb([
+			[
+				{
+					emailId: 3,
+					code: '',
+					subject: 'Your sign-in verification code',
+					text: 'Enter verification code AB12CD to continue.',
+					html: ''
+				}
+			],
+			[]
+		]);
+		const c = { env: { db: recorder.db } };
+		vi.spyOn(maintenanceService, 'health').mockResolvedValue({ ok: true });
+
+		const result = await maintenanceService.repair(c, 'codes-rescan');
+
+		expect(result.lastAction).toMatchObject({
+			action: 'codes-rescan',
+			scanned: 1,
+			updated: 1,
+			cleared: 0,
+			backfilled: 1
+		});
+		expect(recorder.batched).toHaveLength(1);
+		expect(recorder.batched[0].bindings).toEqual(['AB12CD', 3]);
+		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [3]);
+	});
+
+	it('clears all expired site-wide verification codes in safe batches', async () => {
+		const recorder = createMaintenanceDb([
+			[{ emailId: 7 }, { emailId: 8 }],
+			[]
+		]);
+		const c = { env: { db: recorder.db } };
+		vi.spyOn(maintenanceService, 'health').mockResolvedValue({ ok: true });
+
+		const result = await maintenanceService.repair(c, 'codes-clear-stale');
+
+		expect(result.lastAction).toMatchObject({
+			action: 'codes-clear-stale',
+			scanned: 2,
+			updated: 2,
+			cleared: 2,
+			backfilled: 0
+		});
+		const update = recorder.statements.find(item => item.sql.includes('UPDATE email SET code'));
+		expect(update.bindings).toEqual(['', 7, 8]);
+		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [7, 8]);
 	});
 });

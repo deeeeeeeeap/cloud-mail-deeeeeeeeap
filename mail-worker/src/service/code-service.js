@@ -3,7 +3,7 @@ import { emailConst, isDel } from '../const/entity-const';
 import { extractCodeByPattern } from './ai-service';
 import emailSearchService from './email-search-service';
 
-const CODE_STALE_MINUTES = 15;
+export const CODE_STALE_MINUTES = 15;
 
 function normalizePageSize(size) {
 	const pageSize = Number(size);

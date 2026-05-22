@@ -62,6 +62,26 @@
       </div>
 
       <div class="panel">
+        <div class="panel-title">{{ $t('codeMaintenance') }}</div>
+        <div class="panel-desc">{{ $t('codeMaintenanceDesc') }}</div>
+        <div v-if="canRepair" class="repair-actions">
+          <el-button type="primary" plain :loading="repairing === 'codes-rescan'" @click="repair('codes-rescan')">
+            {{ $t('rescanCodes') }}
+          </el-button>
+          <el-button type="warning" plain :loading="repairing === 'codes-clean'" @click="repair('codes-clean')">
+            {{ $t('cleanFalseCodes') }}
+          </el-button>
+          <el-button type="danger" plain :loading="repairing === 'codes-clear-stale'" @click="repair('codes-clear-stale')">
+            {{ $t('clearStaleCodes') }}
+          </el-button>
+        </div>
+        <el-empty v-else :description="$t('unauthorized')" :image-size="80"/>
+        <div v-if="health.lastAction" class="action-result">
+          {{ $t('codeMaintenanceResult', health.lastAction) }}
+        </div>
+      </div>
+
+      <div class="panel">
         <div class="panel-title">{{ $t('diagnosticDetails') }}</div>
         <el-descriptions :column="detailColumn" border>
           <el-descriptions-item label="Email Total">{{ health.details?.emailTotal ?? '-' }}</el-descriptions-item>
@@ -120,7 +140,7 @@ function refresh() {
 }
 
 function repair(action) {
-  ElMessageBox.confirm(t('repairConfirm'), t('warning'), {
+  ElMessageBox.confirm(repairConfirmText(action), t('warning'), {
     type: 'warning'
   }).then(() => {
     repairing.value = action
@@ -131,6 +151,16 @@ function repair(action) {
       repairing.value = ''
     })
   })
+}
+
+function repairConfirmText(action) {
+  if (action === 'codes-clear-stale') {
+    return t('clearStaleCodesConfirm')
+  }
+  if (action === 'codes-rescan' || action === 'codes-clean') {
+    return t('codeMaintenanceConfirm')
+  }
+  return t('repairConfirm')
 }
 
 function joinList(list) {
@@ -271,10 +301,28 @@ refresh()
   padding-bottom: 12px;
 }
 
+.panel-desc {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: -4px;
+  margin-bottom: 12px;
+}
+
 .repair-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.action-result {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success-dark-2);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .query-plan {

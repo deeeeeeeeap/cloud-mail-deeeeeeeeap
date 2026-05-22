@@ -3,6 +3,8 @@ import emailSearchService from './email-search-service';
 import kvConst from '../const/kv-const';
 import { emailConst, isDel } from '../const/entity-const';
 import BizError from '../error/biz-error';
+import { extractCodeByPattern } from './ai-service';
+import { CODE_STALE_MINUTES } from './code-service';
 
 const EXPECTED_EMAIL_COLUMNS = [
 	'email_id',
@@ -62,8 +64,29 @@ const SEARCH_TABLE_SQL_LIST = [
 	`CREATE INDEX IF NOT EXISTS idx_email_search_user_id ON email_search(user_id, email_id);`
 ];
 
+const CODE_MAINTENANCE_BATCH_SIZE = 100;
+
 function isMissingTable(error, tableName) {
 	return new RegExp(`no such table: ${tableName}`, 'i').test(error?.message || '');
+}
+
+async function runStatements(c, statements) {
+	if (statements.length === 0) {
+		return;
+	}
+
+	if (c.env.db.batch) {
+		await c.env.db.batch(statements);
+		return;
+	}
+
+	await Promise.all(statements.map(statement => statement.run()));
+}
+
+async function syncChangedEmailIds(c, emailIds) {
+	for (let i = 0; i < emailIds.length; i += CODE_MAINTENANCE_BATCH_SIZE) {
+		await emailSearchService.syncEmailIds(c, emailIds.slice(i, i + CODE_MAINTENANCE_BATCH_SIZE));
+	}
 }
 
 const maintenanceService = {
@@ -189,7 +212,10 @@ const maintenanceService = {
 			repairActions: [
 				{ key: 'schema', label: 'Repair schema' },
 				{ key: 'indexes', label: 'Repair indexes' },
-				{ key: 'search', label: 'Rebuild search table' }
+				{ key: 'search', label: 'Rebuild search table' },
+				{ key: 'codes-rescan', label: 'Rescan verification codes' },
+				{ key: 'codes-clean', label: 'Clean false positive codes' },
+				{ key: 'codes-clear-stale', label: 'Clear expired codes' }
 			]
 		};
 	},
@@ -217,7 +243,152 @@ const maintenanceService = {
 			return this.health(c);
 		}
 
+		if (action === 'codes-rescan') {
+			return this.withMaintenanceResult(c, await this.rescanCodes(c, { existingOnly: false }));
+		}
+
+		if (action === 'codes-clean') {
+			return this.withMaintenanceResult(c, await this.rescanCodes(c, { existingOnly: true }));
+		}
+
+		if (action === 'codes-clear-stale') {
+			return this.withMaintenanceResult(c, await this.clearStaleCodes(c));
+		}
+
 		throw new BizError('Unknown maintenance action', 400);
+	},
+
+	async withMaintenanceResult(c, result) {
+		const health = await this.health(c);
+		return {
+			...health,
+			lastAction: result
+		};
+	},
+
+	async rescanCodes(c, options = {}) {
+		const existingOnly = options.existingOnly === true;
+		let cursorEmailId = 0;
+		let scanned = 0;
+		let updated = 0;
+		let cleared = 0;
+		let backfilled = 0;
+		const changedIds = [];
+
+		while (true) {
+			const conditions = [
+				`email_id > ?`,
+				`type = ?`,
+				`status != ?`,
+				`is_del = ?`
+			];
+			const binds = [
+				cursorEmailId,
+				emailConst.type.RECEIVE,
+				emailConst.status.SAVING,
+				isDel.NORMAL
+			];
+
+			if (existingOnly) {
+				conditions.push(`code != ?`);
+				binds.push('');
+			}
+
+			const rows = await c.env.db.prepare(`
+				SELECT
+					email_id AS emailId,
+					code,
+					subject,
+					text,
+					content AS html
+				FROM email
+				WHERE ${conditions.join(' AND ')}
+				ORDER BY email_id ASC
+				LIMIT ?
+			`).bind(...binds, CODE_MAINTENANCE_BATCH_SIZE).all();
+
+			const list = rows.results || [];
+			if (list.length === 0) {
+				break;
+			}
+
+			cursorEmailId = list[list.length - 1].emailId;
+			const statements = [];
+
+			for (const row of list) {
+				scanned++;
+				const currentCode = row.code || '';
+				const nextCode = extractCodeByPattern(row);
+
+				if (currentCode === nextCode) {
+					continue;
+				}
+
+				statements.push(
+					c.env.db.prepare(`UPDATE email SET code = ? WHERE email_id = ?`).bind(nextCode, row.emailId)
+				);
+				changedIds.push(row.emailId);
+				updated++;
+
+				if (!currentCode && nextCode) {
+					backfilled++;
+				}
+
+				if (currentCode && !nextCode) {
+					cleared++;
+				}
+			}
+
+			await runStatements(c, statements);
+		}
+
+		await syncChangedEmailIds(c, changedIds);
+
+		return {
+			action: existingOnly ? 'codes-clean' : 'codes-rescan',
+			scanned,
+			updated,
+			backfilled,
+			cleared
+		};
+	},
+
+	async clearStaleCodes(c) {
+		let cleared = 0;
+		const changedIds = [];
+
+		while (true) {
+			const ids = await c.env.db.prepare(`
+				SELECT email_id AS emailId
+				FROM email
+				WHERE code != ?
+					AND status != ?
+					AND is_del = ?
+					AND datetime(create_time) < datetime('now', ?)
+				ORDER BY email_id ASC
+				LIMIT ?
+			`).bind('', emailConst.status.SAVING, isDel.NORMAL, `-${CODE_STALE_MINUTES} minutes`, CODE_MAINTENANCE_BATCH_SIZE).all();
+
+			const emailIds = (ids.results || []).map(row => row.emailId);
+			if (emailIds.length === 0) {
+				break;
+			}
+
+			const placeholders = emailIds.map(() => '?').join(',');
+			await c.env.db.prepare(`UPDATE email SET code = ? WHERE email_id IN (${placeholders})`).bind('', ...emailIds).run();
+			changedIds.push(...emailIds);
+			cleared += emailIds.length;
+		}
+
+		await syncChangedEmailIds(c, changedIds);
+
+		return {
+			action: 'codes-clear-stale',
+			scanned: cleared,
+			updated: cleared,
+			backfilled: 0,
+			cleared
+		};
 	}
 };
 
