@@ -66,6 +66,8 @@ describe('code service', () => {
 		expect(statement.sql).not.toContain('e.user_id = ?');
 		expect(statement.sql).not.toContain("datetime(e.create_time) >=");
 		expect(result.list[0].userEmail).toBe('u@example.com');
+		expect(result.list[0].isStale).toBe(false);
+		expect(result.list[0].expiresInMinutes).toBe(CODE_STALE_MINUTES);
 		expect(result.hasMore).toBe(false);
 	});
 

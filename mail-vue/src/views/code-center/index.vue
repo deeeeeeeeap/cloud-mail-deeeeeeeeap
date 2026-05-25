@@ -13,6 +13,8 @@
       <Icon class="icon" icon="ion:reload" width="18" height="18" @click="refresh"/>
     </div>
 
+    <div class="code-help">{{ $t('codeCenterHint') }}</div>
+
     <div class="tabs" v-if="canViewAll">
       <el-tabs v-model="scope" @tab-change="refresh">
         <el-tab-pane :label="$t('myCodes')" name="mine"/>
@@ -25,14 +27,26 @@
         <Loading/>
       </div>
       <div class="code-box">
-        <div class="code-item" :class="item.isStale ? 'stale' : ''" v-for="item in codes" :key="`${scope}-${item.emailId}`" @click="copyCode(item.code)">
+        <div
+            class="code-item"
+            :class="{stale: item.isStale, copied: copiedEmailId === item.emailId}"
+            v-for="item in codes"
+            :key="`${scope}-${item.emailId}`"
+            role="button"
+            tabindex="0"
+            @click="copyCode(item)"
+            @keydown.enter="copyCode(item)"
+            @keydown.space.prevent="copyCode(item)"
+        >
           <div class="code-info">
             <div class="info-left">
               <div class="info-left-item">
-                <span class="code" @click.stop="copyCode(item.code)">{{ item.code }}</span>
+                <span class="code" @click.stop="copyCode(item)">{{ item.code }}</span>
                 <el-tag v-if="item.isStale" type="info">{{ $t('staleCode') }}</el-tag>
                 <el-tag v-else type="success">{{ $t('freshCode') }}</el-tag>
+                <el-tag v-if="copiedEmailId === item.emailId" type="primary">{{ $t('copied') }}</el-tag>
               </div>
+              <div class="info-left-item code-meta" :class="item.isStale ? 'expired' : ''">{{ codeStatusText(item) }}</div>
               <div class="info-left-item subject">{{ item.subject || $t('noSubject') }}</div>
               <div class="info-left-item"><span class="label">{{ $t('sender') }}:</span><span>{{ item.name || item.sendEmail || '-' }}</span></div>
               <div class="info-left-item"><span class="label">{{ $t('selectEmail') }}:</span><span>{{ item.toEmail || '-' }}</span></div>
@@ -57,7 +71,7 @@
 </template>
 
 <script setup>
-import {computed, defineOptions, reactive, ref, watch} from "vue";
+import {computed, defineOptions, onBeforeUnmount, reactive, ref, watch} from "vue";
 import {Icon} from "@iconify/vue";
 import {ElMessage} from "element-plus";
 import router from "@/router/index.js";
@@ -80,6 +94,8 @@ const loading = ref(false)
 const loadingMore = ref(false)
 const first = ref(true)
 const hasMore = ref(false)
+const copiedEmailId = ref(0)
+let copyTimer = 0
 const params = reactive({
   query: '',
   stale: 'fresh',
@@ -130,9 +146,41 @@ function getList(refreshList = false) {
   })
 }
 
-async function copyCode(code) {
-  await navigator.clipboard.writeText(code)
-  ElMessage({message: t('copySuccessMsg'), type: 'success'})
+async function writeClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  document.body.removeChild(textarea)
+  if (!copied) {
+    throw new Error('copy failed')
+  }
+}
+
+async function copyCode(item) {
+  const code = typeof item === 'string' ? item : item?.code
+  if (!code) return
+
+  try {
+    await writeClipboard(code)
+    copiedEmailId.value = typeof item === 'object' ? item.emailId : 0
+    if (copyTimer) clearTimeout(copyTimer)
+    copyTimer = window.setTimeout(() => {
+      copiedEmailId.value = 0
+    }, 1500)
+    ElMessage({message: t('copySuccessMsg'), type: 'success'})
+  } catch {
+    ElMessage({message: t('copyFailMsg'), type: 'error'})
+  }
 }
 
 function openDetail(item) {
@@ -154,6 +202,21 @@ function displayTime(time) {
   return time ? time.replace('T', ' ').slice(0, 16) : '-'
 }
 
+function codeStatusText(item) {
+  if (item.isStale) {
+    return t('codeExpiredHint')
+  }
+  const minutes = Number(item.expiresInMinutes)
+  if (Number.isFinite(minutes)) {
+    return t('codeExpiresIn', {minutes: Math.max(1, Math.ceil(minutes))})
+  }
+  return t('freshCode')
+}
+
+onBeforeUnmount(() => {
+  if (copyTimer) clearTimeout(copyTimer)
+})
+
 getList(true)
 </script>
 
@@ -161,6 +224,8 @@ getList(true)
 .code-center {
   height: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .header-actions {
@@ -194,14 +259,21 @@ getList(true)
   }
 }
 
-.scrollbar {
-  height: calc(100% - 48px);
-  position: relative;
-  background: var(--extra-light-fill);
+.code-help {
+  flex-shrink: 0;
+  padding: 8px 15px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+  background: var(--el-bg-color);
+  box-shadow: inset 0 -1px 0 0 rgba(100, 121, 143, 0.08);
 }
 
-.tabs + .scrollbar {
-  height: calc(100% - 88px);
+.scrollbar {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--extra-light-fill);
 }
 
 .code-box {
@@ -222,8 +294,18 @@ getList(true)
       opacity: 0.62;
     }
 
+    &.copied {
+      border-color: var(--el-color-primary);
+      box-shadow: 0 0 0 1px var(--el-color-primary-light-7);
+    }
+
     &:hover {
       border-color: var(--el-color-primary-light-5);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--el-color-primary-light-5);
+      outline-offset: 2px;
     }
   }
 
@@ -279,6 +361,15 @@ getList(true)
   .time {
     color: var(--el-text-color-secondary);
     font-size: 13px;
+  }
+
+  .code-meta {
+    color: var(--el-color-success-dark-2);
+    font-size: 13px;
+
+    &.expired {
+      color: var(--el-text-color-secondary);
+    }
   }
 }
 

@@ -27,9 +27,13 @@ function likeValue(value) {
 
 function mapCodeRow(row) {
 	const createTime = row.createTime || '';
+	const ageMinutes = createTime ? dayjs().diff(dayjs(createTime), 'minute') : null;
+	const normalizedAge = Number.isFinite(ageMinutes) ? Math.max(0, ageMinutes) : null;
 	return {
 		...row,
-		isStale: createTime ? dayjs().diff(dayjs(createTime), 'minute') >= CODE_STALE_MINUTES : false
+		isStale: normalizedAge !== null ? normalizedAge >= CODE_STALE_MINUTES : false,
+		ageMinutes: normalizedAge,
+		expiresInMinutes: normalizedAge !== null ? Math.max(0, CODE_STALE_MINUTES - normalizedAge) : null
 	};
 }
 

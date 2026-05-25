@@ -5,13 +5,280 @@ const CONTENT_LIMIT = 8000;
 const QUICK_HTML_LIMIT = 12000;
 const SCORE_THRESHOLD = 85;
 
-const AUTH_PURPOSE_RE = /(verification|verify|one[-\s]?time|otp|2fa|mfa|passcode|security\s+code|auth(?:entication)?\s+code|login\s+code|log[-\s]?in\s+code|sign[-\s]?in\s+code|sign[-\s]?up\s+code|signup\s+code|confirm(?:ation)?\s+code|\u9a8c\u8bc1\u7801|\u6821\u9a8c\u7801|\u52a8\u6001\u7801|\u5b89\u5168\u7801|\u786e\u8ba4\u7801|\u767b\u5f55\u7801|\u6ce8\u518c\u7801|\u4e00\u6b21\u6027|\u53e3\u4ee4)/i;
-const WEAK_AUTH_RE = /(login|log[-\s]?in|sign[-\s]?in|sign[-\s]?up|signup|register|registration|auth(?:entication)?|security|password|account|\u767b\u5f55|\u6ce8\u518c|\u8d26\u53f7|\u8d26\u6237|\u5bc6\u7801|\u5b89\u5168)/i;
-const GENERIC_CODE_LABEL_RE = /(\bcode\b|\bpin\b|\u9a8c\u8bc1\u7801|\u6821\u9a8c\u7801|\u52a8\u6001\u7801|\u5b89\u5168\u7801|\u786e\u8ba4\u7801|\u767b\u5f55\u7801|\u6ce8\u518c\u7801|\u53e3\u4ee4|\u5bc6\u7801)/i;
-const STRONG_CODE_LABEL_RE = /(verification\s+code|verify\s+code|one[-\s]?time\s+code|otp|2fa|mfa|passcode|security\s+code|auth(?:entication)?\s+code|login\s+code|log[-\s]?in\s+code|sign[-\s]?in\s+code|sign[-\s]?up\s+code|signup\s+code|confirm(?:ation)?\s+code|\u9a8c\u8bc1\u7801|\u6821\u9a8c\u7801|\u52a8\u6001\u7801|\u5b89\u5168\u7801|\u786e\u8ba4\u7801|\u767b\u5f55\u7801|\u6ce8\u518c\u7801|\u53e3\u4ee4)/i;
-const DIRECT_CODE_LABEL_RE = /(verification\s+code|verify\s+code|one[-\s]?time\s+code|otp|2fa|mfa|passcode|security\s+code|auth(?:entication)?\s+code|login\s+code|log[-\s]?in\s+code|sign[-\s]?in\s+code|sign[-\s]?up\s+code|signup\s+code|confirm(?:ation)?\s+code|\bcode\b|\bpin\b|\u9a8c\u8bc1\u7801|\u6821\u9a8c\u7801|\u52a8\u6001\u7801|\u5b89\u5168\u7801|\u786e\u8ba4\u7801|\u767b\u5f55\u7801|\u6ce8\u518c\u7801|\u53e3\u4ee4|\u5bc6\u7801)/i;
-const ACTION_RE = /(\buse\b|\benter\b|\binput\b|\btype\b|\bcopy\b|\bpaste\b|\bsubmit\b|\bconfirm\b|\bverify\b|\bauthenticate\b|\bcontinue\b|\bcomplete\b|\u8f93\u5165|\u586b\u5199|\u4f7f\u7528|\u590d\u5236|\u7c98\u8d34|\u9a8c\u8bc1|\u786e\u8ba4|\u767b\u5f55|\u7ee7\u7eed)/i;
-const NEGATIVE_CONTEXT_RE = /(invoice|receipt|order|tracking|shipment|package|delivery|reference|ref(?:erence)?\s*id|ticket|case|request|transaction|payment|amount|total|balance|promo|coupon|discount|voucher|referral|gift\s*card|status\s*code|error\s*code|source\s*code|zip\s*code|postal\s*code|ip(?:\s*address)?|browser|device|version|chrome|firefox|edge|safari|windows|macos|android|ios|copyright|unsubscribe|\u8ba2\u5355|\u53d1\u7968|\u7269\u6d41|\u5feb\u9012|\u7f16\u53f7|\u53c2\u8003|\u4f18\u60e0|\u6298\u6263|\u8bbe\u5907|\u6d4f\u89c8\u5668)/i;
+function buildRe(patterns) {
+	return new RegExp(`(?:${patterns.join('|')})`, 'i');
+}
+
+const STRONG_CODE_LABEL_PATTERNS = [
+	'verification\\s+code',
+	'verify\\s+code',
+	'one[-\\s]?time\\s+code',
+	'otp',
+	'2fa',
+	'mfa',
+	'passcode',
+	'security\\s+code',
+	'auth(?:entication)?\\s+code',
+	'login\\s+code',
+	'log[-\\s]?in\\s+code',
+	'sign[-\\s]?in\\s+code',
+	'sign[-\\s]?up\\s+code',
+	'signup\\s+code',
+	'confirm(?:ation)?\\s+code',
+	'c[o\\u00f3]digo\\s+(?:de\\s+)?verificaci[o\\u00f3]n',
+	'c[o\\u00f3]digo\\s+de\\s+seguridad',
+	'c[o\\u00f3]digo\\s+de\\s+acceso',
+	'code\\s+de\\s+v[e\\u00e9]rification',
+	'code\\s+de\\s+s[e\\u00e9]curit[e\\u00e9]',
+	'verifizierungs\\s*code',
+	'best[a\\u00e4]tigungs\\s*code',
+	'sicherheits\\s*code',
+	'einmal\\s*code',
+	'codice\\s+(?:di\\s+)?verifica',
+	'codice\\s+di\\s+sicurezza',
+	'c[o\\u00f3]digo\\s+de\\s+verifica[c\\u00e7][a\\u00e3]o',
+	'c[o\\u00f3]digo\\s+de\\s+seguran[c\\u00e7]a',
+	'verificatie\\s*code',
+	'beveiligings\\s*code',
+	'kode\\s+verifikasi',
+	'kode\\s+keamanan',
+	'm(?:a|\\u00e3)\\s+x(?:a|\\u00e1)c\\s+minh',
+	'm(?:a|\\u00e3)\\s+b(?:a|\\u1ea3)o\\s+m(?:a|\\u1ead)t',
+	'\\u9a8c\\u8bc1\\u7801',
+	'\\u6821\\u9a8c\\u7801',
+	'\\u52a8\\u6001\\u7801',
+	'\\u5b89\\u5168\\u7801',
+	'\\u786e\\u8ba4\\u7801',
+	'\\u767b\\u5f55\\u7801',
+	'\\u6ce8\\u518c\\u7801',
+	'\\u53e3\\u4ee4',
+	'\\u8a8d\\u8a3c\\s*\\u30b3\\u30fc\\u30c9',
+	'\\u78ba\\u8a8d\\s*\\u30b3\\u30fc\\u30c9',
+	'\\u30bb\\u30ad\\u30e5\\u30ea\\u30c6\\u30a3\\s*\\u30b3\\u30fc\\u30c9',
+	'\\u30ef\\u30f3\\u30bf\\u30a4\\u30e0',
+	'\\uc778\\uc99d\\s*\\ucf54\\ub4dc',
+	'\\ud655\\uc778\\s*\\ucf54\\ub4dc',
+	'\\ubcf4\\uc548\\s*\\ucf54\\ub4dc',
+	'\\uc77c\\ud68c\\uc6a9',
+	'\\u043a\\u043e\\u0434\\s+\\u043f\\u043e\\u0434\\u0442\\u0432\\u0435\\u0440\\u0436\\u0434\\u0435\\u043d\\u0438\\u044f',
+	'\\u043f\\u0440\\u043e\\u0432\\u0435\\u0440\\u043e\\u0447\\u043d\\u044b\\u0439\\s+\\u043a\\u043e\\u0434',
+	'\\u043e\\u0434\\u043d\\u043e\\u0440\\u0430\\u0437\\u043e\\u0432\\u044b\\u0439\\s+\\u043a\\u043e\\u0434',
+	'\\u043a\\u043e\\u0434\\s+\\u0431\\u0435\\u0437\\u043e\\u043f\\u0430\\u0441\\u043d\\u043e\\u0441\\u0442\\u0438'
+];
+const GENERIC_CODE_LABEL_PATTERNS = [
+	'\\bcode\\b',
+	'\\bpin\\b',
+	'\\bc[o\\u00f3]digo\\b',
+	'\\bcodice\\b',
+	'\\bkode\\b',
+	'\\u043a\\u043e\\u0434',
+	'\\u30b3\\u30fc\\u30c9',
+	'\\ucf54\\ub4dc',
+	'\\u9a8c\\u8bc1\\u7801',
+	'\\u6821\\u9a8c\\u7801',
+	'\\u52a8\\u6001\\u7801',
+	'\\u5b89\\u5168\\u7801',
+	'\\u786e\\u8ba4\\u7801',
+	'\\u767b\\u5f55\\u7801',
+	'\\u6ce8\\u518c\\u7801',
+	'\\u53e3\\u4ee4',
+	'\\u5bc6\\u7801'
+];
+const WEAK_AUTH_PATTERNS = [
+	'login',
+	'log[-\\s]?in',
+	'sign[-\\s]?in',
+	'sign[-\\s]?up',
+	'signup',
+	'register',
+	'registration',
+	'auth(?:entication)?',
+	'security',
+	'password',
+	'account',
+	'iniciar\\s+sesi[o\\u00f3]n',
+	'sesi[o\\u00f3]n',
+	'cuenta',
+	'contrase[\\u00f1n]a',
+	'seguridad',
+	'connexion',
+	'compte',
+	'mot\\s+de\\s+passe',
+	's[e\\u00e9]curit[e\\u00e9]',
+	'anmeldung',
+	'konto',
+	'passwort',
+	'sicherheit',
+	'accesso',
+	'account',
+	'password',
+	'sicurezza',
+	'entrar',
+	'conta',
+	'senha',
+	'seguran[c\\u00e7]a',
+	'masuk',
+	'akun',
+	'sandi',
+	'\\u767b\\u5f55',
+	'\\u6ce8\\u518c',
+	'\\u8d26\\u53f7',
+	'\\u8d26\\u6237',
+	'\\u5bc6\\u7801',
+	'\\u5b89\\u5168',
+	'\\u30ed\\u30b0\\u30a4\\u30f3',
+	'\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8',
+	'\\u30d1\\u30b9\\u30ef\\u30fc\\u30c9',
+	'\\u30bb\\u30ad\\u30e5\\u30ea\\u30c6\\u30a3',
+	'\\ub85c\\uadf8\\uc778',
+	'\\uacc4\\uc815',
+	'\\ube44\\ubc00\\ubc88\\ud638',
+	'\\ubcf4\\uc548',
+	'\\u0432\\u0445\\u043e\\u0434',
+	'\\u0430\\u043a\\u043a\\u0430\\u0443\\u043d\\u0442',
+	'\\u043f\\u0430\\u0440\\u043e\\u043b\\u044c',
+	'\\u0431\\u0435\\u0437\\u043e\\u043f\\u0430\\u0441\\u043d'
+];
+
+const AUTH_PURPOSE_RE = buildRe([
+	'verification',
+	'verify',
+	'one[-\\s]?time',
+	'\\u4e00\\u6b21\\u6027',
+	...STRONG_CODE_LABEL_PATTERNS
+]);
+const WEAK_AUTH_RE = buildRe(WEAK_AUTH_PATTERNS);
+const GENERIC_CODE_LABEL_RE = buildRe(GENERIC_CODE_LABEL_PATTERNS);
+const STRONG_CODE_LABEL_RE = buildRe(STRONG_CODE_LABEL_PATTERNS);
+const DIRECT_CODE_LABEL_RE = buildRe([...STRONG_CODE_LABEL_PATTERNS, ...GENERIC_CODE_LABEL_PATTERNS]);
+const ACTION_RE = buildRe([
+	'\\buse\\b',
+	'\\benter\\b',
+	'\\binput\\b',
+	'\\btype\\b',
+	'\\bcopy\\b',
+	'\\bpaste\\b',
+	'\\bsubmit\\b',
+	'\\bconfirm\\b',
+	'\\bverify\\b',
+	'\\bauthenticate\\b',
+	'\\bcontinue\\b',
+	'\\bcomplete\\b',
+	'\\busa\\b',
+	'\\busar\\b',
+	'ingresa(?:r)?',
+	'introduce',
+	'saisissez',
+	'saisir',
+	'entrez',
+	'utiliser',
+	'utilisez',
+	'eingeben',
+	'verwenden',
+	'geben\\s+sie',
+	'inserisci',
+	'digite',
+	'insira',
+	'masukkan',
+	'nh(?:a|\\u1ead)p',
+	'\\u8f93\\u5165',
+	'\\u586b\\u5199',
+	'\\u4f7f\\u7528',
+	'\\u590d\\u5236',
+	'\\u7c98\\u8d34',
+	'\\u9a8c\\u8bc1',
+	'\\u786e\\u8ba4',
+	'\\u767b\\u5f55',
+	'\\u7ee7\\u7eed',
+	'\\u5165\\u529b',
+	'\\u78ba\\u8a8d',
+	'\\uc785\\ub825',
+	'\\uc0ac\\uc6a9',
+	'\\ud655\\uc778',
+	'\\u0432\\u0432\\u0435\\u0434\\u0438\\u0442\\u0435',
+	'\\u0438\\u0441\\u043f\\u043e\\u043b\\u044c\\u0437\\u0443\\u0439\\u0442\\u0435'
+]);
+const NEGATIVE_CONTEXT_RE = buildRe([
+	'invoice',
+	'receipt',
+	'order',
+	'tracking',
+	'shipment',
+	'package',
+	'delivery',
+	'reference',
+	'ref(?:erence)?\\s*id',
+	'ticket',
+	'case',
+	'request',
+	'transaction',
+	'payment',
+	'amount',
+	'total',
+	'balance',
+	'promo',
+	'coupon',
+	'discount',
+	'voucher',
+	'referral',
+	'gift\\s*card',
+	'status\\s*code',
+	'error\\s*code',
+	'source\\s*code',
+	'zip\\s*code',
+	'postal\\s*code',
+	'ip(?:\\s*address)?',
+	'browser',
+	'device',
+	'version',
+	'chrome',
+	'firefox',
+	'edge',
+	'safari',
+	'windows',
+	'macos',
+	'android',
+	'ios',
+	'copyright',
+	'unsubscribe',
+	'pedido',
+	'factura',
+	'env[i\\u00ed]o',
+	'referencia',
+	'cup[o\\u00f3]n',
+	'descuento',
+	'commande',
+	'facture',
+	'livraison',
+	'r[e\\u00e9]f[e\\u00e9]rence',
+	'remise',
+	'bestellung',
+	'rechnung',
+	'lieferung',
+	'referenz',
+	'gutschein',
+	'rabatt',
+	'fatura',
+	'entrega',
+	'refer[e\\u00ea]ncia',
+	'cupom',
+	'ordine',
+	'fattura',
+	'spedizione',
+	'riferimento',
+	'sconto',
+	'\\u8ba2\\u5355',
+	'\\u53d1\\u7968',
+	'\\u7269\\u6d41',
+	'\\u5feb\\u9012',
+	'\\u7f16\\u53f7',
+	'\\u53c2\\u8003',
+	'\\u4f18\\u60e0',
+	'\\u6298\\u6263',
+	'\\u8bbe\\u5907',
+	'\\u6d4f\\u89c8\\u5668',
+	'\\u0437\\u0430\\u043a\\u0430\\u0437'
+]);
 const URL_OR_EMAIL_RE = /(?:https?:\/\/|www\.)\S+|\b\S+@\S+\b/i;
 const CODE_TOKEN_RE = /(^|[^A-Za-z0-9])([A-Za-z0-9]{4,8})(?=$|[^A-Za-z0-9])/g;
 const SEPARATED_DIGIT_CODE_RE = /(^|[^A-Za-z0-9])(\d(?:[ \t-]?\d){3,7})(?=$|[^A-Za-z0-9])/g;
@@ -130,6 +397,8 @@ function scoreCandidate(text, candidate, hintPositions, subjectLength) {
 	const context = windowAround(text, candidate.index);
 	const subject = text.slice(0, subjectLength);
 	const subjectHasAuthPurpose = AUTH_PURPOSE_RE.test(subject);
+	const subjectHasWeakAuth = WEAK_AUTH_RE.test(subject);
+	const subjectHasAuthIntent = subjectHasAuthPurpose || subjectHasWeakAuth;
 	const strongLabelNear = STRONG_CODE_LABEL_RE.test(context);
 	const directLabelNear = DIRECT_CODE_LABEL_RE.test(context);
 	const authPurposeNear = AUTH_PURPOSE_RE.test(context);
@@ -151,7 +420,7 @@ function scoreCandidate(text, candidate, hintPositions, subjectLength) {
 
 	if (strongLabelNear) {
 		score += 90;
-	} else if (directLabelNear && (actionNear || authPurposeNear || subjectHasAuthPurpose)) {
+	} else if (directLabelNear && (actionNear || authPurposeNear || subjectHasAuthIntent)) {
 		score += 70;
 	} else if (directLabelNear) {
 		score += 25;
@@ -164,15 +433,17 @@ function scoreCandidate(text, candidate, hintPositions, subjectLength) {
 	}
 	if (subjectHasAuthPurpose && candidate.index > subjectLength && candidate.index < subjectLength + 1000) {
 		score += 50;
+	} else if (subjectHasWeakAuth && candidate.index > subjectLength && candidate.index < subjectLength + 1000) {
+		score += 30;
 	}
-	if (normalizeCodeToken(line) === code && (subjectHasAuthPurpose || authPurposeNear || directLabelNear)) {
+	if (normalizeCodeToken(line) === code && (subjectHasAuthIntent || authPurposeNear || directLabelNear)) {
 		score += 70;
 	}
 	if (nearestHintDistance !== Number.POSITIVE_INFINITY) {
 		score += Math.max(0, 40 - nearestHintDistance);
 	}
 
-	if (!directLabelNear && !authPurposeNear && !subjectHasAuthPurpose) {
+	if (!directLabelNear && !authPurposeNear && !subjectHasAuthIntent) {
 		score -= 80;
 	}
 	if (negativeContext) {

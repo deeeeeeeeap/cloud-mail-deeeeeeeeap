@@ -31,6 +31,45 @@ describe('ai service code extraction', () => {
 		expect(code).toBe('AB12CD');
 	});
 
+	it('extracts localized verification codes across common languages', () => {
+		const cases = [
+			{
+				subject: 'Tu código de verificación',
+				text: 'Usa el código 482913 para iniciar sesión.',
+				expected: '482913'
+			},
+			{
+				subject: 'Votre code de vérification',
+				text: 'Saisissez le code A7B9C2 pour continuer.',
+				expected: 'A7B9C2'
+			},
+			{
+				subject: 'Ihr Sicherheitscode',
+				text: 'Geben Sie den Code 314159 ein.',
+				expected: '314159'
+			},
+			{
+				subject: 'Código de verificação',
+				text: 'Use o código 7F4K2P para entrar.',
+				expected: '7F4K2P'
+			},
+			{
+				subject: '認証コード',
+				text: '認証コード: 8H2KQ9',
+				expected: '8H2KQ9'
+			},
+			{
+				subject: '인증 코드',
+				text: '인증 코드 593027',
+				expected: '593027'
+			}
+		];
+
+		for (const item of cases) {
+			expect(extractCodeByPattern(item), item.subject).toBe(item.expected);
+		}
+	});
+
 	it('does not extract unrelated numbers without a verification hint', () => {
 		const code = extractCodeByPattern({
 			subject: 'Your invoice is ready',
@@ -65,6 +104,24 @@ describe('ai service code extraction', () => {
 		});
 
 		expect(code).toBe('');
+	});
+
+	it('does not extract localized order ids from account security notices', () => {
+		const code = extractCodeByPattern({
+			subject: 'Actualización de seguridad de la cuenta',
+			text: 'Código de pedido AB12CD34. No se requiere ninguna acción.'
+		});
+
+		expect(code).toBe('');
+	});
+
+	it('uses localized subject auth intent with a generic code label', () => {
+		const code = extractCodeByPattern({
+			subject: 'Inicio de sesión en tu cuenta',
+			text: 'Código: 246810'
+		});
+
+		expect(code).toBe('246810');
 	});
 
 	it('uses the local parser before calling Workers AI', async () => {
