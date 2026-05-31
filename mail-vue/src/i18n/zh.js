@@ -15,6 +15,7 @@ const zh = {
     maintenanceDesc: '检查绑定、数据库结构、索引和搜索表状态',
     healthIssues: '健康检查',
     safeRepair: '安全修复',
+    safeRepairDesc: '补齐缺失的数据库结构、索引和搜索表，幂等执行，不会删除真实邮件、用户或附件。',
     diagnosticDetails: '诊断详情',
     databaseSchema: '数据库结构',
     databaseIndexes: '数据库索引',

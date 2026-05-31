@@ -54,7 +54,7 @@
               <div class="info-left-item time">{{ displayTime(item.createTime) }}</div>
             </div>
             <div class="info-right">
-              <el-button class="detail-button" text @click.stop="openDetail(item)">{{ $t('details') }}</el-button>
+              <el-button class="detail-button" text @click.stop="openDetail(item)" @keydown.enter.stop @keydown.space.stop>{{ $t('details') }}</el-button>
             </div>
           </div>
         </div>

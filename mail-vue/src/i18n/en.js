@@ -15,6 +15,7 @@ const en = {
     maintenanceDesc: 'Check bindings, database schema, indexes, and search table status',
     healthIssues: 'Health Checks',
     safeRepair: 'Safe Repair',
+    safeRepairDesc: 'Repair missing database schema, indexes, and search table safely without deleting emails, users, or attachments.',
     diagnosticDetails: 'Diagnostic Details',
     databaseSchema: 'Database Schema',
     databaseIndexes: 'Database Indexes',

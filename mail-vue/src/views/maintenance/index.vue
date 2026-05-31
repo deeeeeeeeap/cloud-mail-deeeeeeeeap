@@ -45,23 +45,24 @@
         </el-table>
       </div>
 
-      <div class="panel">
+      <div class="panel action-panel">
         <div class="panel-title">{{ $t('safeRepair') }}</div>
+        <div class="panel-desc">{{ $t('safeRepairDesc') }}</div>
         <div v-if="canRepair" class="repair-actions">
-          <el-button type="primary" :loading="repairing === 'schema'" @click="repair('schema')">
+          <el-button type="primary" plain :loading="repairing === 'schema'" @click="repair('schema')">
             {{ $t('repairSchema') }}
           </el-button>
-          <el-button type="primary" :loading="repairing === 'indexes'" @click="repair('indexes')">
+          <el-button type="primary" plain :loading="repairing === 'indexes'" @click="repair('indexes')">
             {{ $t('repairIndexes') }}
           </el-button>
-          <el-button type="warning" :loading="repairing === 'search'" @click="repair('search')">
+          <el-button type="warning" plain :loading="repairing === 'search'" @click="repair('search')">
             {{ $t('rebuildSearch') }}
           </el-button>
         </div>
         <el-empty v-else :description="$t('unauthorized')" :image-size="80"/>
       </div>
 
-      <div class="panel">
+      <div class="panel action-panel">
         <div class="panel-title">{{ $t('codeMaintenance') }}</div>
         <div class="panel-desc">{{ $t('codeMaintenanceDesc') }}</div>
         <div v-if="canRepair" class="repair-actions">
@@ -306,6 +307,15 @@ refresh()
   padding: 14px 16px;
 }
 
+.action-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.action-panel .panel-title {
+  padding-bottom: 0;
+}
+
 .panel-title {
   font-size: 17px;
   font-weight: 500;
@@ -316,14 +326,20 @@ refresh()
   color: var(--el-text-color-secondary);
   font-size: 13px;
   line-height: 1.5;
-  margin-top: -4px;
-  margin-bottom: 12px;
+  margin: 0;
 }
 
 .repair-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, max-content));
+  gap: 12px 24px;
+  align-items: center;
+
+  :deep(.el-button) {
+    width: 150px;
+    min-width: 150px;
+    margin-left: 0;
+  }
 }
 
 .action-result {
@@ -378,5 +394,25 @@ refresh()
 
 :deep(.el-descriptions__label) {
   width: 145px;
+}
+
+@media (max-width: 767px) {
+  .panel {
+    padding: 14px;
+  }
+
+  .panel-title {
+    font-size: 16px;
+  }
+
+  .repair-actions {
+    grid-template-columns: 1fr;
+    gap: 10px;
+
+    :deep(.el-button) {
+      width: 100%;
+      min-width: 0;
+    }
+  }
 }
 </style>
