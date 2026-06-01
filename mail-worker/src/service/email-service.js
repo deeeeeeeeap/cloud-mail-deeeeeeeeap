@@ -713,6 +713,7 @@ const emailService = {
 		}
 
 		await orm(c).update(email).set({ status, message: message }).where(eq(email.emailId, sendEmailData.emailId)).run();
+		await emailSearchService.syncEmailIds(c, [sendEmailData.emailId]);
 
 	},
 
@@ -1092,9 +1093,21 @@ const emailService = {
 	},
 
 	async completeReceiveAll(c) {
-		const pendingRows = await orm(c).select({ emailId: email.emailId }).from(email).where(eq(email.status, emailConst.status.SAVING)).all();
-		await c.env.db.prepare(`UPDATE email as e SET status = ${emailConst.status.RECEIVE} WHERE status = ${emailConst.status.SAVING} AND EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)`).run();
-		await c.env.db.prepare(`UPDATE email as e SET status = ${emailConst.status.NOONE} WHERE status = ${emailConst.status.SAVING} AND NOT EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)`).run();
+		const { results: pendingRows = [] } = await c.env.db.prepare(`
+			SELECT email_id AS emailId
+			FROM email
+			WHERE status = ? AND is_del = ?
+		`).bind(emailConst.status.SAVING, isDel.NORMAL).all();
+		await c.env.db.prepare(`
+			UPDATE email as e
+			SET status = ?
+			WHERE status = ? AND is_del = ? AND EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)
+		`).bind(emailConst.status.RECEIVE, emailConst.status.SAVING, isDel.NORMAL).run();
+		await c.env.db.prepare(`
+			UPDATE email as e
+			SET status = ?
+			WHERE status = ? AND is_del = ? AND NOT EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)
+		`).bind(emailConst.status.NOONE, emailConst.status.SAVING, isDel.NORMAL).run();
 		await emailSearchService.syncEmailIds(c, pendingRows.map(row => row.emailId));
 	},
 
