@@ -465,8 +465,6 @@ const emailService = {
 			};
 		}
 
-		console.error(sendForm)
-
 		const result = await c.env.email.send(sendForm);
 
 		return {
