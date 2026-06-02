@@ -1,5 +1,7 @@
 import { emailConst, isDel } from '../const/entity-const';
 
+export const EMAIL_SEARCH_BODY_LIMIT = 4000;
+
 function hasSearchParams(params) {
 	return !!(params.userEmail || params.accountEmail || params.name || params.subject || params.searchText);
 }
@@ -185,7 +187,7 @@ const emailSearchService = {
 						COALESCE(e.send_email, '') || ' ' ||
 						COALESCE(e.to_email, '') || ' ' ||
 						COALESCE(u.email, '') || ' ' ||
-						COALESCE(e.text, '')
+						SUBSTR(COALESCE(e.text, ''), 1, ${EMAIL_SEARCH_BODY_LIMIT})
 					),
 					e.type,
 					e.status,

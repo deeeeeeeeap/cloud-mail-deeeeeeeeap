@@ -2,6 +2,7 @@ import settingService from '../service/setting-service';
 import emailUtils from '../utils/email-utils';
 import {emailConst} from "../const/entity-const";
 import secretUtils from '../utils/secret-utils';
+import { EMAIL_SEARCH_BODY_LIMIT } from '../service/email-search-service';
 
 const dbInit = {
 	async init(c) {
@@ -86,7 +87,7 @@ const dbInit = {
 					COALESCE(e.send_email, '') || ' ' ||
 					COALESCE(e.to_email, '') || ' ' ||
 					COALESCE(u.email, '') || ' ' ||
-					COALESCE(e.text, '')
+					SUBSTR(COALESCE(e.text, ''), 1, ${EMAIL_SEARCH_BODY_LIMIT})
 				),
 				e.type,
 				e.status,
