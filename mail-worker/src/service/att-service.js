@@ -9,6 +9,22 @@ import { parseHTML } from 'linkedom';
 import { v4 as uuidv4 } from 'uuid';
 import domainUtils from '../utils/domain-uitls';
 import settingService from "./setting-service";
+import BizError from '../error/biz-error';
+
+const NOT_FOUND_MESSAGE = 'Attachment not found';
+
+function normalizeAttId(attId) {
+	const id = Number(attId);
+	return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function contentDisposition(filename) {
+	const fallback = String(filename || 'attachment')
+		.replace(/[\r\n"]/g, '_')
+		.replace(/[^\x20-\x7E]/g, '_') || 'attachment';
+	const encoded = encodeURIComponent(filename || 'attachment');
+	return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
 
 const attService = {
 
@@ -45,6 +61,96 @@ const attService = {
 				isNull(att.contentId)
 			)
 		).all();
+	},
+
+	async isPubliclyProtectedKey(c, key) {
+		if (!key || !key.startsWith(constant.ATTACHMENT_PREFIX)) {
+			return false;
+		}
+
+		if (!c.env?.db) {
+			return true;
+		}
+
+		try {
+			const row = await c.env.db.prepare(`
+				SELECT att_id
+				FROM attachments
+				WHERE key = ?
+				  AND type = ?
+				  AND (content_id IS NULL OR content_id = '')
+				LIMIT 1
+			`).bind(key, attConst.type.ATT).first();
+			return !!row;
+		} catch (e) {
+			return true;
+		}
+	},
+
+	async download(c, params, userId) {
+		const attRow = await this.selectDownloadAtt(c, params.attId, userId);
+		return await this.toDownloadResponse(c, attRow);
+	},
+
+	async downloadAny(c, params) {
+		const attRow = await this.selectDownloadAtt(c, params.attId);
+		return await this.toDownloadResponse(c, attRow);
+	},
+
+	async selectDownloadAtt(c, attId, userId) {
+		const id = normalizeAttId(attId);
+		if (!id) {
+			throw new BizError(NOT_FOUND_MESSAGE, 404);
+		}
+
+		const filters = [
+			'att_id = ?',
+			'type = ?',
+			'(content_id IS NULL OR content_id = \'\')'
+		];
+		const bindings = [id, attConst.type.ATT];
+
+		if (userId !== undefined && userId !== null) {
+			filters.push('user_id = ?');
+			bindings.push(userId);
+		}
+
+		const attRow = await c.env.db.prepare(`
+			SELECT att_id as attId,
+			       user_id as userId,
+			       email_id as emailId,
+			       account_id as accountId,
+			       key,
+			       filename,
+			       mime_type as mimeType,
+			       size,
+			       type,
+			       content_id as contentId
+			FROM attachments
+			WHERE ${filters.join(' AND ')}
+			LIMIT 1
+		`).bind(...bindings).first();
+
+		if (!attRow) {
+			throw new BizError(NOT_FOUND_MESSAGE, 404);
+		}
+
+		return attRow;
+	},
+
+	async toDownloadResponse(c, attRow) {
+		const obj = await r2Service.getObj(c, attRow.key);
+		const response = r2Service.toResponse(obj, {
+			'Content-Disposition': contentDisposition(attRow.filename),
+			'Cache-Control': 'private, max-age=0, no-store',
+			'Access-Control-Expose-Headers': 'Content-Disposition'
+		});
+
+		if (!response) {
+			throw new BizError(NOT_FOUND_MESSAGE, 404);
+		}
+
+		return response;
 	},
 
 	async toImageUrlHtml(c, content) {

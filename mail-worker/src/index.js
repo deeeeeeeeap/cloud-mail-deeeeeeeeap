@@ -6,6 +6,7 @@ import emailService from './service/email-service';
 import kvObjService from './service/kv-obj-service';
 import oauthService from "./service/oauth-service";
 import analysisService from './service/analysis-service';
+import attService from './service/att-service';
 export default {
 	 async fetch(req, env, ctx) {
 
@@ -17,7 +18,15 @@ export default {
 			return app.fetch(req, env, ctx);
 		}
 
-		 if (['/static/','/attachments/'].some(p => url.pathname.startsWith(p))) {
+		 if (url.pathname.startsWith('/attachments/')) {
+			 const key = url.pathname.substring(1);
+			 if (await attService.isPubliclyProtectedKey({ env }, key)) {
+				 return new Response('Not found', { status: 404 });
+			 }
+			 return await kvObjService.toObjResp( { env }, key);
+		 }
+
+		 if (url.pathname.startsWith('/static/')) {
 			 return await kvObjService.toObjResp( { env }, url.pathname.substring(1));
 		 }
 

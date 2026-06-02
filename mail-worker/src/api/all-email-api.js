@@ -1,6 +1,7 @@
 import app from '../hono/hono';
 import emailService from '../service/email-service';
 import result from '../model/result';
+import attService from '../service/att-service';
 
 app.get('/allEmail/list', async (c) => {
 	const data = await emailService.allList(c, c.req.query());
@@ -10,6 +11,10 @@ app.get('/allEmail/list', async (c) => {
 app.get('/allEmail/detail', async (c) => {
 	const email = await emailService.detail(c, c.req.query(), null, true);
 	return c.json(result.ok(email));
+})
+
+app.get('/allEmail/attachment/download', async (c) => {
+	return await attService.downloadAny(c, c.req.query());
 })
 
 app.delete('/allEmail/delete', async (c) => {

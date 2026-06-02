@@ -46,18 +46,16 @@
             <div class="att-box">
 
               <div class="att-item" v-for="att in email.attList" :key="att.attId">
-                <div class="att-icon" @click="showImage(att.key)">
+                <div class="att-icon" @click="showImage(att)">
                   <Icon v-bind="getIconByName(att.filename)" />
                 </div>
-                <div class="att-name" @click="showImage(att.key)">
+                <div class="att-name" @click="showImage(att)">
                   {{ att.filename }}
                 </div>
                 <div class="att-size">{{ formatBytes(att.size) }}</div>
                 <div class="opt-icon att-icon">
-                  <Icon v-if="isImage(att.filename)" icon="hugeicons:view" width="22" height="22" @click="showImage(att.key)"/>
-                  <a :href="cvtR2Url(att.key)" download>
-                    <Icon icon="system-uicons:push-down" width="22" height="22"/>
-                  </a>
+                  <Icon v-if="isImage(att.filename)" icon="hugeicons:view" width="22" height="22" @click="showImage(att)"/>
+                  <Icon icon="system-uicons:push-down" width="22" height="22" @click="downloadAttachment(att)"/>
                 </div>
               </div>
             </div>
@@ -85,7 +83,7 @@ import {useAccountStore} from "@/store/account.js";
 import {formatDetailDate} from "@/utils/day.js";
 import {starAdd, starCancel} from "@/request/star.js";
 import {getExtName, formatBytes} from "@/utils/file-utils.js";
-import {cvtR2Url,toOssDomain} from "@/utils/convert.js";
+import {toOssDomain} from "@/utils/convert.js";
 import {getIconByName} from "@/utils/icon-utils.js";
 import {useSettingStore} from "@/store/setting.js";
 import {allEmailDelete, allEmailDetail} from "@/request/all-email.js";
@@ -102,6 +100,7 @@ const email = emailStore.contentData.email
 const showPreview = ref(false)
 const srcList = reactive([])
 let detailPromise = null
+let previewObjectUrls = []
 
 const { t } = useI18n()
 watch(() => accountStore.currentAccountId, () => {
@@ -118,6 +117,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   emailStore.contentData.showUnread = false;
+  clearPreviewUrls();
 })
 
 async function openReply() {
@@ -162,12 +162,88 @@ function formatImage(content) {
   return  content.replace(/{{domain}}/g, toOssDomain(domain) + '/');
 }
 
-function showImage(key) {
-  if (!isImage(key)) return;
-  const url = cvtR2Url(key)
-  srcList.length = 0
-  srcList.push(url)
-  showPreview.value = true
+async function showImage(att) {
+  if (!isImage(att.filename)) return;
+  try {
+    const url = await fetchAttachmentObjectUrl(att)
+    srcList.length = 0
+    srcList.push(url)
+    showPreview.value = true
+  } catch (e) {
+    ElMessage({
+      message: e.message || t('reqFailErrorMsg'),
+      type: 'error',
+      plain: true,
+      grouping: true,
+      repeatNum: -4
+    })
+  }
+}
+
+async function downloadAttachment(att) {
+  try {
+    const blob = await fetchAttachmentBlob(att)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = att.filename || 'attachment'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 0)
+  } catch (e) {
+    ElMessage({
+      message: e.message || t('reqFailErrorMsg'),
+      type: 'error',
+      plain: true,
+      grouping: true,
+      repeatNum: -4
+    })
+  }
+}
+
+async function fetchAttachmentObjectUrl(att) {
+  const blob = await fetchAttachmentBlob(att)
+  clearPreviewUrls()
+  const url = URL.createObjectURL(blob)
+  previewObjectUrls.push(url)
+  return url
+}
+
+async function fetchAttachmentBlob(att) {
+  const response = await fetch(attachmentDownloadUrl(att.attId), {
+    headers: {
+      Authorization: `${localStorage.getItem('token') || ''}`
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error(await response.text() || t('reqFailErrorMsg'))
+  }
+
+  const contentType = response.headers.get('Content-Type') || ''
+  const hasDownloadHeader = !!response.headers.get('Content-Disposition')
+  if (contentType.includes('application/json') && !hasDownloadHeader) {
+    const data = await response.clone().json().catch(() => null)
+    if (data?.code && data.code !== 200) {
+      throw new Error(data.message || t('reqFailErrorMsg'))
+    }
+  }
+
+  return response.blob()
+}
+
+function attachmentDownloadUrl(attId) {
+  const path = emailStore.contentData.delType === 'physics'
+      ? '/allEmail/attachment/download'
+      : '/email/attachment/download'
+  const baseUrl = (import.meta.env.VITE_BASE_URL || '/api').replace(/\/$/, '')
+  return `${baseUrl}${path}?attId=${encodeURIComponent(attId)}`
+}
+
+function clearPreviewUrls() {
+  previewObjectUrls.forEach(url => URL.revokeObjectURL(url))
+  previewObjectUrls = []
 }
 
 function isImage(filename) {

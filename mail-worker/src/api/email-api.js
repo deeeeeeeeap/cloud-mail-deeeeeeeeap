@@ -19,6 +19,10 @@ app.get('/email/detail', async (c) => {
 	return c.json(result.ok(email));
 });
 
+app.get('/email/attachment/download', async (c) => {
+	return await attService.download(c, c.req.query(), userContext.getUserId(c));
+});
+
 app.delete('/email/delete', async (c) => {
 	await emailService.delete(c, c.req.query(), userContext.getUserId(c));
 	return c.json(result.ok());

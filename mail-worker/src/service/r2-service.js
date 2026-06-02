@@ -56,6 +56,42 @@ const r2Service = {
 		}
 	},
 
+	toResponse(obj, extraHeaders = {}) {
+		if (!obj) {
+			return null;
+		}
+
+		const headers = new Headers();
+		let body = obj.body;
+
+		if (obj instanceof Response) {
+			body = obj.body;
+			obj.headers.forEach((value, key) => {
+				if (value && value !== 'null') {
+					headers.set(key, value);
+				}
+			});
+		} else if (typeof obj.writeHttpMetadata === 'function') {
+			obj.writeHttpMetadata(headers);
+		} else if (obj.httpMetadata) {
+			if (obj.httpMetadata.contentType) headers.set('Content-Type', obj.httpMetadata.contentType);
+			if (obj.httpMetadata.contentDisposition) headers.set('Content-Disposition', obj.httpMetadata.contentDisposition);
+			if (obj.httpMetadata.cacheControl) headers.set('Cache-Control', obj.httpMetadata.cacheControl);
+		}
+
+		if (!headers.get('Content-Type')) {
+			headers.set('Content-Type', 'application/octet-stream');
+		}
+
+		Object.entries(extraHeaders).forEach(([key, value]) => {
+			if (value !== undefined && value !== null && value !== '') {
+				headers.set(key, value);
+			}
+		});
+
+		return new Response(body, { headers });
+	},
+
 	async delete(c, key) {
 
 		const storageType = await this.storageType(c);
