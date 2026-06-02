@@ -365,7 +365,7 @@
 </template>
 
 <script setup>
-import {defineOptions, h, reactive, ref, watch} from 'vue'
+import {defineOptions, h, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
 import {
   userList,
   userDelete,
@@ -514,10 +514,20 @@ const filterItem = reactive({
   receive: ['normal', 'del']
 })
 
-window.addEventListener('wheel', (event) => {
+function handleWheel() {
   if (dropdownShow.value) {
-    dropdownRef.value.handleClose();
+    dropdownRef.value?.handleClose?.();
   }
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('wheel', handleWheel)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('wheel', handleWheel)
 })
 
 function visibleChange(e) {
@@ -1016,9 +1026,9 @@ function getUserList(loading = true) {
   })
 }
 
-window.onresize = () => {
+function handleResize() {
   adjustWidth()
-};
+}
 
 adjustWidth()
 

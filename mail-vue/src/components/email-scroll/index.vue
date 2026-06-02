@@ -370,23 +370,33 @@ onActivated(() => {
   })
 })
 
+function handleResize() {
+  isMobile.value = window.innerWidth < 1367
+}
+
+function handleWheel() {
+  if (dropdownShow.value) {
+    dropdownRef.value?.handleClose?.();
+  }
+}
+
 onMounted(() => {
   timer = setInterval(() => {
     emailList.forEach(email => {
       email.formatCreateTime = fromNow(email.createTime);
     })
   }, 1000 * 60);
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('wheel', handleWheel)
 })
 
 onUnmounted(() => {
   clearInterval(timer)
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('wheel', handleWheel)
 })
 
 getEmailList()
-
-window.onresize = () => {
-  isMobile.value = innerWidth < 1367
-}
 
 function onScroll(e) {
   scrollTop = e.target.scrollTop;
@@ -486,12 +496,6 @@ watch(() => emailStore.addStarEmailId, () => {
       email.isStar = 1
     }
   })
-})
-
-window.addEventListener('wheel', (event) => {
-  if (dropdownShow.value) {
-    dropdownRef.value.handleClose();
-  }
 })
 
 async function openReply(email) {
