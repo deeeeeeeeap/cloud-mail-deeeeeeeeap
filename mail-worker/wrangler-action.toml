@@ -50,6 +50,7 @@ linuxdo_callback_url = "${LINUXDO_CALLBACK_URL}"
 linuxdo_switch = "${LINUXDO_SWITCH}"
 cors_origins = "${CORS_ORIGINS}"
 resend_webhook_secret = "${RESEND_WEBHOOK_SECRET}"
+resend_webhook_allow_unsigned = "${RESEND_WEBHOOK_ALLOW_UNSIGNED}"
 
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"

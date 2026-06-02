@@ -5,6 +5,13 @@ import secretUtils from '../utils/secret-utils';
 
 const encoder = new TextEncoder();
 
+function isTrueFlag(value) {
+	if (value === true) {
+		return true;
+	}
+	return ['true', '1', 'yes'].includes(String(value || '').toLowerCase());
+}
+
 const resendService = {
 
 	async webhooks(c, rawBody) {
@@ -54,8 +61,11 @@ const resendService = {
 	async verifyWebhook(c, rawBody) {
 		const secret = c.env.resend_webhook_secret;
 		if (!secret) {
-			console.warn('resend_webhook_secret is not configured; skipping webhook signature verification.');
-			return;
+			if (isTrueFlag(c.env.resend_webhook_allow_unsigned)) {
+				console.warn('resend_webhook_secret is not configured; unsigned Resend webhooks are allowed by explicit compatibility flag.');
+				return;
+			}
+			throw new BizError('Resend webhook secret is not configured', 401);
 		}
 
 		const id = c.req.header('svix-id');

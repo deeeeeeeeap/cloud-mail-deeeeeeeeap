@@ -11,7 +11,7 @@
 - 多域名、多邮箱地址管理。
 - 收件箱、已发送、草稿箱、星标邮件、全部邮件。
 - 邮件发送、回复、抄送、密送、附件和内嵌图片。
-- Resend 发信状态回调，支持可选 webhook 签名校验。
+- Resend 发信状态回调，默认要求 webhook 签名校验；旧部署可显式开启未签名兼容。
 - 可选 Cloudflare Email Routing 发信绑定。
 - 可选 R2 附件存储；未绑定 R2 时可按当前配置走兼容路径。
 
@@ -119,6 +119,7 @@ cloud-mail
 | `R2_BUCKET_NAME` | 可选 | 附件对象存储桶 |
 | `CORS_ORIGINS` | 可选 | 额外跨域来源 JSON 数组字符串 |
 | `RESEND_WEBHOOK_SECRET` | 可选 | Resend webhook 签名密钥 |
+| `RESEND_WEBHOOK_ALLOW_UNSIGNED` | 可选 | 仅兼容旧部署时填 `true`；未配置 `RESEND_WEBHOOK_SECRET` 时默认拒绝 webhook |
 | `AI_MODEL` | 可选 | Workers AI 兜底识别模型 |
 | `ANALYSIS_CACHE` | 可选 | 分析页缓存开关 |
 | `CF_EMAIL` | 可选 | 是否启用 Cloudflare Email 发信绑定 |
@@ -216,7 +217,8 @@ https://你的域名/api/init/你的 jwt_secret
 - `D1_DATABASE_ID`
 - `KV_NAMESPACE_ID`
 - `R2_BUCKET_NAME`，可选
-- `RESEND_WEBHOOK_SECRET`，可选
+- `RESEND_WEBHOOK_SECRET`，推荐配置
+- `RESEND_WEBHOOK_ALLOW_UNSIGNED`，可选，仅兼容旧部署时设置为 `true`
 - `CORS_ORIGINS`，可选
 
 工作流会自动：

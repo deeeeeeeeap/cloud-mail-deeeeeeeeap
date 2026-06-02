@@ -45,6 +45,23 @@ describe('security hardening', () => {
 		expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://allowed.example');
 	});
 
+	it('rejects unsigned webhook requests at the public API boundary by default', async () => {
+		const request = new Request('http://example.com/api/webhooks', {
+			method: 'POST',
+			body: '{"type":"email.delivered","data":{"email_id":"email_test"}}'
+		});
+		const ctx = createExecutionContext();
+		const response = await worker.fetch(request, {
+			...env,
+			resend_webhook_secret: '',
+			resend_webhook_allow_unsigned: ''
+		}, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(response.status).toBe(401);
+		expect(await response.text()).toContain('Resend webhook secret is not configured');
+	});
+
 	it('keeps optional migrations idempotent', async () => {
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const calls = [];
@@ -68,6 +85,39 @@ describe('security hardening', () => {
 		await dbInit.runOptionalSqlList(c, ['ALTER TABLE test ADD COLUMN ok TEXT', 'duplicate']);
 
 		expect(calls).toHaveLength(2);
+		expect(warn).toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	it('rejects unsigned Resend webhooks when no secret is configured by default', async () => {
+		const body = '{"type":"email.delivered","data":{"email_id":"email_test"}}';
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const c = {
+			env: {},
+			req: {
+				header() {
+					return null;
+				}
+			}
+		};
+
+		await expect(resendService.verifyWebhook(c, body)).rejects.toThrow('Resend webhook secret is not configured');
+		warn.mockRestore();
+	});
+
+	it('allows unsigned Resend webhooks only when the legacy compatibility flag is explicit', async () => {
+		const body = '{"type":"email.delivered","data":{"email_id":"email_test"}}';
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const c = {
+			env: { resend_webhook_allow_unsigned: 'true' },
+			req: {
+				header() {
+					return null;
+				}
+			}
+		};
+
+		await expect(resendService.verifyWebhook(c, body)).resolves.toBeUndefined();
 		expect(warn).toHaveBeenCalled();
 		warn.mockRestore();
 	});
