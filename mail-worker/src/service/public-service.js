@@ -15,25 +15,51 @@ import email from '../entity/email';
 import userService from './user-service';
 import KvConst from '../const/kv-const';
 
+const PUBLIC_PREVIEW_TEXT_LENGTH = 240;
+
+function toBoolFlag(value) {
+	return value === true || value === 1 || value === '1' || String(value || '').toLowerCase() === 'true';
+}
+
+function previewText(row) {
+	const text = row.previewText || row.text || '';
+	return text
+		.replace(/[\u200B-\u200F\uFEFF\u034F\u00A0\u3000\u00AD]/g, '')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+function publicEmailSelect(includeContent) {
+	const fields = {
+		emailId: email.emailId,
+		sendEmail: email.sendEmail,
+		sendName: email.name,
+		subject: email.subject,
+		toEmail: email.toEmail,
+		toName: email.toName,
+		type: email.type,
+		createTime: email.createTime,
+		previewText: sql`SUBSTR(${email.text}, 1, ${PUBLIC_PREVIEW_TEXT_LENGTH})`,
+		isDel: email.isDel,
+	};
+
+	if (includeContent) {
+		fields.content = email.content;
+		fields.text = email.text;
+	}
+
+	return fields;
+}
+
 const publicService = {
 
 	async emailList(c, params) {
 
-		let { toEmail, content, subject, sendName, sendEmail, timeSort, num, size, type , isDel } = params
+		params = params || {};
+		let { toEmail, content, subject, sendName, sendEmail, timeSort, num, size, type , isDel, includeContent } = params
+		const withContent = toBoolFlag(includeContent);
 
-		const query = orm(c).select({
-				emailId: email.emailId,
-				sendEmail: email.sendEmail,
-				sendName: email.name,
-				subject: email.subject,
-				toEmail: email.toEmail,
-				toName: email.toName,
-				type: email.type,
-				createTime: email.createTime,
-				content: email.content,
-				text: email.text,
-				isDel: email.isDel,
-		}).from(email)
+		const query = orm(c).select(publicEmailSelect(withContent)).from(email)
 
 		if (!size) {
 			size = 20
@@ -99,7 +125,11 @@ const publicService = {
 			query.orderBy(desc(email.emailId));
 		}
 
-		return query.limit(size).offset(num);
+		const list = await query.limit(size).offset(num);
+		return list.map(item => ({
+			...item,
+			previewText: previewText(item)
+		}));
 
 	},
 
