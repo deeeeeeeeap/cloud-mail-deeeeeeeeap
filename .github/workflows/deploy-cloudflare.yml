@@ -22,8 +22,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
       D1_DATABASE_NAME: ${{ secrets.D1_DATABASE_NAME || vars.D1_DATABASE_NAME || 'mail' }}
-      D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID || vars.D1_DATABASE_ID || 'f5a191c5-6409-4688-8880-7904d18890d7' }}
-      KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID || vars.KV_NAMESPACE_ID || '8fd963cd021e46b4b883cbc7560aaeee' }}
+      D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID || vars.D1_DATABASE_ID }}
+      KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID || vars.KV_NAMESPACE_ID }}
       R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
       PROJECT_LINK: ${{ secrets.PROJECT_LINK || vars.PROJECT_LINK }}
       AI_MODEL: ${{ secrets.AI_MODEL || vars.AI_MODEL || '@cf/meta/llama-3.1-8b-instruct' }}
@@ -76,7 +76,8 @@ jobs:
             exit 1
           fi
           
-          if ! jq -e 'type == "array"' <<< "$DOMAIN" ; then
+          if ! jq -e 'type == "array" and length > 0 and all(.[]; type == "string" and length > 0)' <<< "$DOMAIN" ; then
+            echo "ERROR: DOMAIN array cannot be empty and every item must be a string."
             echo "❌ DOMAIN variable must be a JSON array (e.g., [\"example.com\"])."
             exit 1
           fi
