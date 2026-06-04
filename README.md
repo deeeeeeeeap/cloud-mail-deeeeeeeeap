@@ -1,8 +1,17 @@
 # Cloud Mail
 
-基于 Cloudflare Workers 的自托管邮箱系统。本仓库是面向实际自用场景维护的 Cloud Mail 分支，在上游 v3.0.0 基础上补充了性能优化、安全加固、验证码中心、维护中心和自动部署流程。
+基于 Cloudflare Workers 的自托管邮箱系统，适合个人、小团队或临时邮箱场景长期自用。本仓库已经作为独立项目维护，不再依赖 GitHub fork 同步；后续优化以稳定部署、低成本运行、管理员维护体验和验证码读取效率为主。
 
-> 当前项目重点：稳定接收邮件、低成本运行、管理员易维护、验证码读取更快。
+> 当前项目重点：稳定收发、低成本运行、数据可维护、验证码读取更快。
+
+## 项目特点
+
+- **一体化部署**：一个 Cloudflare Worker 同时承载后端 API 和 Vue 前端静态资源。
+- **数据归自己所有**：邮件、用户、设置保存在自己的 D1 / KV / R2 资源里。
+- **低成本验证码中心**：默认使用本地规则识别验证码，不开 AI 也能正常使用。
+- **维护中心内置**：可检查 D1/KV/R2/AI/发信绑定，补齐字段、索引和搜索表。
+- **面向真实部署优化**：提供 Workers Git、GitHub Actions 和本地 Wrangler 三种部署路径。
+- **安全默认值更稳**：Webhook、CORS、HTML 预览、附件访问和 public 接口做了兼容性加固。
 
 ## 功能概览
 
@@ -105,6 +114,8 @@ cloud-mail
 5. Workers AI，可选，绑定名 `ai`。不开启也不影响本地验证码识别。
 6. 自定义域名和邮箱域名 DNS / Email Routing。
 
+如果你是从旧仓库或旧 Worker 切换过来，只要继续绑定原来的 `D1_DATABASE_ID`、`KV_NAMESPACE_ID` 和 `R2_BUCKET_NAME`，数据不会因为换 GitHub 仓库而丢失。真正需要避免的是部署时误绑定到新的 D1 / KV。
+
 ## 重要环境变量
 
 不要把真实密钥提交到仓库。生产环境建议放在 Cloudflare 变量或 GitHub Secrets / Variables。
@@ -180,13 +191,15 @@ corepack pnpm build
 
 ## 部署
 
+推荐新部署优先使用 **Cloudflare Workers Git 集成**。如果你已经有旧 Worker 项目，也可以直接把 GitHub 连接切到本仓库，再确认构建变量仍然指向原来的 D1 / KV / R2。
+
 ### 方式一：Cloudflare 直接部署
 
 `mail-worker/wrangler.toml` 中配置了：
 
 - Worker 入口：`src/index.js`
 - 静态资源目录：`./dist`
-- 构建命令：`pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build`
+- 构建命令：`node ../scripts/cloudflare-workers-git-build.mjs`
 
 部署命令：
 
@@ -227,6 +240,14 @@ node ../scripts/cloudflare-workers-git-deploy.mjs
 - `NAME`，可选，默认 `cloud-mail`
 - `CF_EMAIL`，可选，填 `true` 时启用 Cloudflare Email 发信绑定
 - `CLOUD_MAIL_WRANGLER_VERSION`，可选，默认 `4.92.0`
+
+已有生产数据时，最重要的是确认以下三项仍然是旧资源：
+
+```text
+D1_DATABASE_ID=原来的 D1 ID
+KV_NAMESPACE_ID=原来的 KV ID
+R2_BUCKET_NAME=原来的 R2 桶名，可选
+```
 
 本地只验证不部署时，可以临时设置：
 
@@ -295,6 +316,17 @@ npx wrangler deploy
 6. 如提示缺字段、缺索引或缺搜索表，按顺序执行“补齐数据库结构”“补齐索引”“重建搜索表”。
 7. 进入系统设置，配置域名、管理员、Resend、公告、验证码识别等业务选项。
 
+### 从旧 Cloudflare 项目切到本仓库
+
+如果你已经有正在运行的 Cloudflare Worker，只是把 GitHub 连接改到本仓库，建议按这个顺序做：
+
+1. 先在 Cloudflare Dashboard 里记录当前 D1、KV、R2 绑定信息。
+2. 新 GitHub 连接使用 `node scripts/cloudflare-workers-git-deploy.mjs` 作为部署命令。
+3. 构建变量里填回旧资源 ID，不要留空让 Wrangler 自动创建新资源。
+4. 部署完成后进入维护中心，确认 `db`、`kv`、`assets`、`r2` 状态正常。
+5. 如果页面显示缺字段或缺索引，按维护中心提示执行幂等修复。
+6. 确认收件箱、验证码中心、附件预览、发信设置都能访问后，再清理旧仓库连接。
+
 ## 数据库与维护
 
 首次初始化或从旧版本同步后，建议进入“维护中心”检查：
@@ -362,6 +394,16 @@ corepack pnpm install --no-frozen-lockfile
 2. 使用仓库根目录已有的 `wrangler.jsonc` 重新部署。
 3. 如果已经合并过错误配置，把其中的 `assets.directory = "mail-vue"` 或 `"directory": "mail-vue"` 替换为本仓库根目录配置。
 4. 重新部署后进入维护中心检查 D1 / KV 绑定状态。
+
+### 换到新仓库后像是数据没了
+
+通常不是数据被删除，而是 Worker 绑定到了新的 D1 / KV。检查 Cloudflare 当前 Worker 的绑定：
+
+- D1 绑定名必须是 `db`，ID 应该是旧 D1 的 ID。
+- KV 绑定名必须是 `kv`，ID 应该是旧 KV 的 ID。
+- R2 绑定名建议是 `r2`，桶名应该是旧桶名。
+
+修正绑定后重新部署，原数据会重新显示。
 
 ### D1 报 no such column
 
