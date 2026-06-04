@@ -17,17 +17,37 @@ function cloneSetting(settingRow) {
 	return JSON.parse(JSON.stringify(settingRow));
 }
 
+function normalizeSettingRow(settingRow) {
+	if (!settingRow) {
+		return null;
+	}
+
+	if (typeof settingRow.resendTokens === 'string') {
+		settingRow.resendTokens = JSON.parse(settingRow.resendTokens || '{}');
+	}
+
+	return settingRow;
+}
+
+async function cacheSettingRow(c, settingRow) {
+	const cloned = cloneSetting(settingRow);
+	c.set?.('setting', cloned);
+	settingCache = {
+		value: cloned,
+		expiresAt: Date.now() + SETTING_CACHE_TTL
+	};
+	await c.env.kv.put(KvConst.SETTING, JSON.stringify(cloned));
+	return cloneSetting(cloned);
+}
+
 const settingService = {
 
 	async refresh(c) {
-		const settingRow = await orm(c).select().from(setting).get();
-		settingRow.resendTokens = JSON.parse(settingRow.resendTokens);
-		c.set('setting', settingRow);
-		settingCache = {
-			value: cloneSetting(settingRow),
-			expiresAt: Date.now() + SETTING_CACHE_TTL
-		};
-		await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingRow));
+		const settingRow = normalizeSettingRow(await orm(c).select().from(setting).get());
+		if (!settingRow) {
+			throw new BizError('数据库未初始化 Database not initialized.');
+		}
+		await cacheSettingRow(c, settingRow);
 	},
 
 	async query(c) {
@@ -36,20 +56,31 @@ const settingService = {
 			return c.get('setting')
 		}
 
-		let setting = null;
+		let settingData = null;
 		if (settingCache && settingCache.expiresAt > Date.now()) {
-			setting = cloneSetting(settingCache.value);
+			settingData = cloneSetting(settingCache.value);
 		} else {
-			setting = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
-			if (setting) {
+			settingData = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
+			if (settingData) {
 				settingCache = {
-					value: cloneSetting(setting),
+					value: cloneSetting(settingData),
 					expiresAt: Date.now() + SETTING_CACHE_TTL
 				};
 			}
 		}
 
-		if (!setting) {
+		if (!settingData) {
+			try {
+				settingData = normalizeSettingRow(await orm(c).select().from(setting).get());
+				if (settingData) {
+					settingData = await cacheSettingRow(c, settingData);
+				}
+			} catch (e) {
+				console.warn(`Unable to restore settings cache from D1: ${e.message}`);
+			}
+		}
+
+		if (!settingData) {
 			throw new BizError('数据库未初始化 Database not initialized.');
 		}
 
@@ -68,7 +99,7 @@ const settingService = {
 		}
 
 		domainList = domainList.map(item => '@' + item);
-		setting.domainList = domainList;
+		settingData.domainList = domainList;
 
 
 		let linuxdoSwitch = c.env.linuxdo_switch;
@@ -90,16 +121,16 @@ const settingService = {
 			projectLink = true
 		}
 
-		setting.projectLink = projectLink;
+		settingData.projectLink = projectLink;
 
-		setting.linuxdoClientId = c.env.linuxdo_client_id;
-		setting.linuxdoCallbackUrl = c.env.linuxdo_callback_url;
-		setting.linuxdoSwitch = linuxdoSwitch;
+		settingData.linuxdoClientId = c.env.linuxdo_client_id;
+		settingData.linuxdoCallbackUrl = c.env.linuxdo_callback_url;
+		settingData.linuxdoSwitch = linuxdoSwitch;
 
-		setting.emailPrefixFilter = setting.emailPrefixFilter.split(",").filter(Boolean);
+		settingData.emailPrefixFilter = settingData.emailPrefixFilter.split(",").filter(Boolean);
 
-		c.set?.('setting', setting);
-		return setting;
+		c.set?.('setting', settingData);
+		return settingData;
 	},
 
 	async get(c, showSiteKey = false) {
