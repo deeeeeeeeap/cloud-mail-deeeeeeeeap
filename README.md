@@ -89,6 +89,7 @@ cloud-mail
 │  └─ vite.config.js         # 构建与分包配置
 ├─ doc/                      # 审计、路线、截图等文档
 ├─ .github/workflows/        # GitHub Actions 部署
+├─ wrangler.jsonc            # Cloudflare Workers Git 根目录部署配置
 └─ README.md
 ```
 
@@ -201,7 +202,28 @@ https://你的域名/api/init/你的 jwt_secret
 
 初始化完成后进入后台设置域名、管理员、Resend、公告、验证码识别等配置。
 
-### 方式二：GitHub Actions 自动部署
+### 方式二：Cloudflare Workers Git 集成
+
+如果你在 Cloudflare Dashboard 里直接连接 GitHub 仓库，并使用默认部署命令：
+
+```text
+npx wrangler deploy
+```
+
+仓库根目录的 `wrangler.jsonc` 会负责：
+
+- 指向真正的 Worker 入口：`mail-worker/src/index.js`。
+- 构建前端并输出到 `mail-worker/dist`。
+- 声明必须存在的绑定名：D1 `db`、KV `kv`、Assets `assets`、Workers AI `ai`。
+
+如果 Cloudflare 自动创建了类似 `Add Cloudflare Workers configuration` 的 PR，并把项目识别成 `Framework: static` / `Output Directory: mail-vue`，不要直接合并那份自动配置。那会把 `mail-vue` 源码目录当静态资源上传，导致 Worker 后端、D1 和 KV 绑定都不可用。应使用本仓库根目录的 `wrangler.jsonc`，或把自动 PR 中的 `wrangler.jsonc` 替换成这里的配置。
+
+已手动创建 D1 / KV 且希望绑定到指定资源时，可以二选一：
+
+1. 推荐使用 GitHub Actions 方式，通过 `D1_DATABASE_ID` 和 `KV_NAMESPACE_ID` 注入，不把资源 ID 写进仓库。
+2. 在自己的私有 fork 中给根目录 `wrangler.jsonc` 补上 `database_id` 和 `id`。
+
+### 方式三：GitHub Actions 自动部署
 
 仓库包含 `.github/workflows/deploy-cloudflare.yml`。推送 `main` 且改动 `mail-worker/**` 或 `mail-vue/**` 时会触发部署。
 
@@ -280,6 +302,22 @@ corepack pnpm install --no-frozen-lockfile
 ```
 
 然后提交更新后的 lockfile。
+
+### Cloudflare Workers Git 部署后 D1 / KV 绑定不上
+
+先看构建日志。如果出现以下特征：
+
+- `Detected Project Settings` 显示 `Framework: Static`。
+- `Output Directory: mail-vue`。
+- 日志里写着 `Create wrangler.jsonc`。
+- 上传列表里出现 `/src/views/...`、`/package.json`、`/.env.release` 等前端源码文件。
+
+说明 Cloudflare 没有用到真正的 Worker 配置，而是自动生成了静态站点配置。处理方式：
+
+1. 不要合并 Cloudflare bot 生成的错误 `wrangler.jsonc` PR。
+2. 使用仓库根目录已有的 `wrangler.jsonc` 重新部署。
+3. 如果已经合并过错误配置，把其中的 `assets.directory = "mail-vue"` 或 `"directory": "mail-vue"` 替换为本仓库根目录配置。
+4. 重新部署后进入维护中心检查 D1 / KV 绑定状态。
 
 ### D1 报 no such column
 

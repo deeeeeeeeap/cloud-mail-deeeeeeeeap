@@ -1,0 +1,39 @@
+{
+  "$schema": "./mail-worker/node_modules/wrangler/config-schema.json",
+  "name": "cloud-mail",
+  "main": "mail-worker/src/index.js",
+  "compatibility_date": "2025-06-04",
+  "keep_vars": true,
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "db",
+      "database_name": "mail"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "kv"
+    }
+  ],
+  "ai": {
+    "binding": "ai"
+  },
+  "assets": {
+    "binding": "assets",
+    "directory": "./mail-worker/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "triggers": {
+    "crons": [
+      "*/30 * * * *",
+      "0 16 * * *"
+    ]
+  },
+  "build": {
+    "command": "npx pnpm@10.11.1 --prefix mail-worker install --frozen-lockfile && npx pnpm@10.11.1 --prefix mail-vue install --frozen-lockfile && npx pnpm@10.11.1 --prefix mail-vue run build"
+  }
+}
