@@ -88,6 +88,7 @@ cloud-mail
 │  ├─ src/store/             # Pinia 状态
 │  └─ vite.config.js         # 构建与分包配置
 ├─ doc/                      # 审计、路线、截图等文档
+├─ scripts/                  # Cloudflare Workers Git 构建/部署辅助脚本
 ├─ .github/workflows/        # GitHub Actions 部署
 ├─ wrangler.jsonc            # Cloudflare Workers Git 根目录部署配置
 └─ README.md
@@ -204,13 +205,43 @@ https://你的域名/api/init/你的 jwt_secret
 
 ### 方式二：Cloudflare Workers Git 集成
 
-如果你在 Cloudflare Dashboard 里直接连接 GitHub 仓库，并使用默认部署命令：
+如果你在 Cloudflare Dashboard 里直接连接 GitHub 仓库，推荐使用仓库提供的部署脚本作为部署命令：
+
+```text
+node scripts/cloudflare-workers-git-deploy.mjs
+```
+
+如果 Cloudflare 项目根目录设置成了 `mail-worker`，部署命令改为：
+
+```text
+node ../scripts/cloudflare-workers-git-deploy.mjs
+```
+
+这个脚本会生成临时 `.wrangler/cloud-mail.generated.wrangler.jsonc`，用环境变量显式写入 D1 / KV / R2 绑定，然后调用 Wrangler 部署。建议在 Cloudflare 项目的构建变量中配置：
+
+- `D1_DATABASE_NAME`，默认 `mail`
+- `D1_DATABASE_ID`
+- `KV_NAMESPACE_ID`
+- `R2_BUCKET_NAME`，可选
+- `CUSTOM_DOMAIN`，可选
+- `NAME`，可选，默认 `cloud-mail`
+- `CF_EMAIL`，可选，填 `true` 时启用 Cloudflare Email 发信绑定
+- `CLOUD_MAIL_WRANGLER_VERSION`，可选，默认 `4.92.0`
+
+本地只验证不部署时，可以临时设置：
+
+```powershell
+$env:CLOUD_MAIL_DEPLOY_DRY_RUN='true'
+node scripts/cloudflare-workers-git-deploy.mjs
+```
+
+如果继续使用默认部署命令：
 
 ```text
 npx wrangler deploy
 ```
 
-仓库根目录的 `wrangler.jsonc` 会负责：
+仓库根目录的 `wrangler.jsonc` 也会负责：
 
 - 指向真正的 Worker 入口：`mail-worker/src/index.js`。
 - 构建前端并输出到 `mail-worker/dist`。
@@ -218,14 +249,15 @@ npx wrangler deploy
 
 如果 Cloudflare 自动创建了类似 `Add Cloudflare Workers configuration` 的 PR，并把项目识别成 `Framework: static` / `Output Directory: mail-vue`，不要直接合并那份自动配置。那会把 `mail-vue` 源码目录当静态资源上传，导致 Worker 后端、D1 和 KV 绑定都不可用。应使用本仓库根目录的 `wrangler.jsonc`，或把自动 PR 中的 `wrangler.jsonc` 替换成这里的配置。
 
-已手动创建 D1 / KV 且希望绑定到指定资源时，可以二选一：
+已手动创建 D1 / KV 且希望绑定到指定资源时，可以三选一：
 
-1. 推荐使用 GitHub Actions 方式，通过 `D1_DATABASE_ID` 和 `KV_NAMESPACE_ID` 注入，不把资源 ID 写进仓库。
-2. 在自己的私有 fork 中给根目录 `wrangler.jsonc` 补上 `database_id` 和 `id`。
+1. 推荐使用上面的 `cloudflare-workers-git-deploy.mjs`，通过环境变量注入，不把资源 ID 写进仓库。
+2. 使用 GitHub Actions 方式，通过 `D1_DATABASE_ID` 和 `KV_NAMESPACE_ID` 注入。
+3. 在自己的私有 fork 中给根目录 `wrangler.jsonc` 补上 `database_id` 和 `id`。
 
 ### 方式三：GitHub Actions 自动部署
 
-仓库包含 `.github/workflows/deploy-cloudflare.yml`。推送 `main` 且改动 `mail-worker/**` 或 `mail-vue/**` 时会触发部署。
+仓库包含 `.github/workflows/deploy-cloudflare.yml`。推送 `main` 且改动 `mail-worker/**`、`mail-vue/**`、`scripts/**`、根目录 `wrangler.jsonc` 或部署 workflow 时会触发部署。
 
 建议配置以下 Secrets / Variables：
 
@@ -250,6 +282,18 @@ npx wrangler deploy
 3. 检查或填充 D1 / KV 绑定。
 4. 构建前端并部署 Worker。
 5. 调用 `/api/init/{JWT_SECRET}` 初始化数据库。
+
+### 首次部署检查清单
+
+首次部署建议按这个顺序确认：
+
+1. Cloudflare 构建日志中没有 `Framework: Static` / `Output Directory: mail-vue` / `Create wrangler.jsonc` 这类误识别提示。
+2. Wrangler 输出的绑定里能看到 `env.db`、`env.kv`、`env.assets`。
+3. 已在 Cloudflare Worker 变量/密钥中配置 `domain`、`admin`、`jwt_secret` 等运行时变量。
+4. 访问 `https://你的域名/api/init/你的 jwt_secret`，返回 `success`。
+5. 登录后台，进入维护中心，检查 D1 / KV / R2 / AI / 发信绑定状态。
+6. 如提示缺字段、缺索引或缺搜索表，按顺序执行“补齐数据库结构”“补齐索引”“重建搜索表”。
+7. 进入系统设置，配置域名、管理员、Resend、公告、验证码识别等业务选项。
 
 ## 数据库与维护
 

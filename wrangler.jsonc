@@ -4,6 +4,8 @@
   "main": "mail-worker/src/index.js",
   "compatibility_date": "2025-06-04",
   "keep_vars": true,
+  "workers_dev": true,
+  "preview_urls": true,
   "observability": {
     "enabled": true
   },
@@ -34,6 +36,6 @@
     ]
   },
   "build": {
-    "command": "node -e \"const fs=require('fs'),cp=require('child_process');const root=fs.existsSync('mail-worker/package.json')?'.':'..';const run=cmd=>cp.execSync(cmd,{stdio:'inherit'});run('npx pnpm@10.11.1 --prefix '+root+'/mail-worker install --frozen-lockfile');run('npx pnpm@10.11.1 --prefix '+root+'/mail-vue install --frozen-lockfile');run('npx pnpm@10.11.1 --prefix '+root+'/mail-vue run build');\""
+    "command": "node -e \"const fs=require('fs'),cp=require('child_process');const script=fs.existsSync('scripts/cloudflare-workers-git-build.mjs')?'scripts/cloudflare-workers-git-build.mjs':'../scripts/cloudflare-workers-git-build.mjs';cp.execFileSync(process.execPath,[script],{stdio:'inherit'});\""
   }
 }
