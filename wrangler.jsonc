@@ -34,6 +34,6 @@
     ]
   },
   "build": {
-    "command": "npx pnpm@10.11.1 --prefix mail-worker install --frozen-lockfile && npx pnpm@10.11.1 --prefix mail-vue install --frozen-lockfile && npx pnpm@10.11.1 --prefix mail-vue run build"
+    "command": "node -e \"const fs=require('fs'),cp=require('child_process');const root=fs.existsSync('mail-worker/package.json')?'.':'..';const run=cmd=>cp.execSync(cmd,{stdio:'inherit'});run('npx pnpm@10.11.1 --prefix '+root+'/mail-worker install --frozen-lockfile');run('npx pnpm@10.11.1 --prefix '+root+'/mail-vue install --frozen-lockfile');run('npx pnpm@10.11.1 --prefix '+root+'/mail-vue run build');\""
   }
 }
