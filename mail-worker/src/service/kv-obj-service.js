@@ -34,7 +34,7 @@ const kvObjService = {
 
 	async toObjResp(c, key) {
 
-		return await this.getObj(c, key);
+		return await this.getObj(c, key) || new Response('Not found', { status: 404 });
 
 	}
 

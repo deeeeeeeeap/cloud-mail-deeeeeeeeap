@@ -66,6 +66,17 @@ function createKvStub(body = 'ok') {
 	};
 }
 
+function createMissingKvStub() {
+	return {
+		async getWithMetadata() {
+			return {
+				value: null,
+				metadata: null
+			};
+		}
+	};
+}
+
 describe('attachment access control', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -115,6 +126,17 @@ describe('attachment access control', () => {
 		expect(await inlineResponse.text()).toBe('inline');
 		expect(staticResponse.status).toBe(200);
 		expect(await staticResponse.text()).toBe('static');
+	});
+
+	it('returns 404 response for missing static objects', async () => {
+		const request = new Request('http://example.com/static/background/missing.jpeg');
+		const ctx = createExecutionContext();
+
+		const response = await worker.fetch(request, { ...testEnv, kv: createMissingKvStub() }, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(response).toBeInstanceOf(Response);
+		expect(response.status).toBe(404);
 	});
 
 	it('downloads an owned normal attachment through the authenticated service path', async () => {
