@@ -214,13 +214,7 @@ window.onTurnstileError = (e) => {
   verifyErrorCount++
   console.warn('人机验加载失败', e)
   setTimeout(() => {
-    nextTick(() => {
-      if (!turnstileId) {
-        turnstileId = window.turnstile.render('.register-turnstile')
-      } else {
-        window.turnstile.reset(turnstileId);
-      }
-    })
+    nextTick(renderTurnstile)
   }, 1500)
 };
 
@@ -228,6 +222,22 @@ window.loadAfter = (e) => {
 }
 
 window.loadBefore = (e) => {
+}
+
+async function renderTurnstile() {
+  try {
+    const {loadTurnstile} = await import("@/utils/turnstile-loader.js");
+    const turnstile = await loadTurnstile();
+    if (!turnstileId) {
+      turnstileId = turnstile.render('.register-turnstile')
+    } else {
+      turnstile.reset(turnstileId)
+    }
+    botJsError.value = false
+  } catch (e) {
+    botJsError.value = true
+    console.warn('人机验证js加载失败', e)
+  }
 }
 
 const loginOpacity = computed(() => {
@@ -505,18 +515,7 @@ function submitRegister() {
   if (!verifyToken && (settingStore.settings.registerVerify === 0 || (settingStore.settings.registerVerify === 2 && settingStore.settings.regVerifyOpen))) {
     if (!verifyShow.value) {
       verifyShow.value = true
-      nextTick(() => {
-        if (!turnstileId) {
-          try {
-            turnstileId = window.turnstile.render('.register-turnstile')
-          } catch (e) {
-            botJsError.value = true
-            console.warn('人机验证js加载失败')
-          }
-        } else {
-          window.turnstile.reset('.register-turnstile')
-        }
-      })
+      nextTick(renderTurnstile)
     } else if (!botJsError.value) {
       ElMessage({
         message: t('botVerifyMsg'),
@@ -558,14 +557,8 @@ function submitRegister() {
     if (res.code === 400) {
       verifyToken = ''
       settingStore.settings.regVerifyOpen = true
-      if (turnstileId) {
-        window.turnstile.reset(turnstileId)
-      } else {
-        nextTick(() => {
-          turnstileId = window.turnstile.render('.register-turnstile')
-        })
-      }
       verifyShow.value = true
+      nextTick(renderTurnstile)
 
     }
   });

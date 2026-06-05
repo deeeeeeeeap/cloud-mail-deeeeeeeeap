@@ -207,19 +207,29 @@ window.onTurnstileError = (e) => {
   verifyErrorCount++
   console.warn('人机验加载失败', e)
   setTimeout(() => {
-    nextTick(() => {
-      if (!turnstileId) {
-        turnstileId = window.turnstile.render('.add-email-turnstile')
-      } else {
-        window.turnstile.reset(turnstileId);
-      }
-    })
+    nextTick(renderTurnstile)
   }, 1500)
 };
 
 window.onTurnstileSuccess = (token) => {
   verifyToken = token;
 };
+
+async function renderTurnstile() {
+  try {
+    const {loadTurnstile} = await import("@/utils/turnstile-loader.js");
+    const turnstile = await loadTurnstile();
+    if (!turnstileId) {
+      turnstileId = turnstile.render('.add-email-turnstile')
+    } else {
+      turnstile.reset(turnstileId)
+    }
+    botJsError.value = false
+  } catch (e) {
+    botJsError.value = true
+    console.warn('人机验证js加载失败', e)
+  }
+}
 
 function getSkeletonRows() {
   if (accounts.length > 20) return skeletonRows = 20
@@ -457,18 +467,7 @@ function submit() {
   if (!verifyToken && (settingStore.settings.addEmailVerify === 0 || (settingStore.settings.addEmailVerify === 2 && settingStore.settings.addVerifyOpen))) {
     if (!verifyShow.value) {
       verifyShow.value = true
-      nextTick(() => {
-        if (!turnstileId) {
-          try {
-            turnstileId = window.turnstile.render('.add-email-turnstile')
-          } catch (e) {
-            botJsError.value = true
-            console.warn('人机验证js加载失败')
-          }
-        } else {
-          window.turnstile.reset('.add-email-turnstile')
-        }
-      })
+      nextTick(renderTurnstile)
     } else if (!botJsError.value) {
       ElMessage({
         message: t('botVerifyMsg'),
@@ -497,14 +496,8 @@ function submit() {
   }).catch(res => {
     if (res.code === 400) {
       verifyToken = ''
-      if (turnstileId) {
-        window.turnstile.reset(turnstileId)
-      } else {
-        nextTick(() => {
-          turnstileId = window.turnstile.render('.add-email-turnstile')
-        })
-      }
       verifyShow.value = true
+      nextTick(renderTurnstile)
     }
     addLoading.value = false
   })

@@ -1,5 +1,3 @@
-import Compressor from "compressorjs";
-
 export function getExtName(fileName) {
     const index = fileName.lastIndexOf('.')
     return index !== -1 ? fileName.slice(index + 1).toLowerCase() : ''
@@ -35,24 +33,4 @@ export function base64Size(base64String) {
     const padding = (base64String.match(/=*$/) || [''])[0].length;
     const base64Length = base64String.length;
     return (base64Length * 3) / 4 - padding;
-}
-
-export function compressImage(file, config = {}) {
-    return new Promise((resolve, reject) => {
-
-        if (file.size < (config.convertSize || 1024 * 1024)) {
-            resolve(file)
-        }
-
-        new Compressor(file, {
-            quality: config.quality || 0.8,
-            mimeType: 'image/jpeg',
-            success(result) {
-                resolve(result);
-            },
-            error(err) {
-                reject(err);
-            },
-        });
-    });
 }

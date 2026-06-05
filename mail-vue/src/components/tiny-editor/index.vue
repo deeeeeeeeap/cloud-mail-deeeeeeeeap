@@ -38,6 +38,8 @@ const editorRef = ref(null);
 const showLoading = ref(false);
 const uiStore = useUiStore();
 const settingStore = useSettingStore();
+let initToken = 0;
+let pendingFocus = false;
 
 onMounted(() => {
   initTinyMCE();
@@ -55,7 +57,7 @@ watch(() => props.defValue, (newValue) => {
 
 watch(() => [uiStore.dark, settingStore.lang], () => {
   destroyEditor();
-  initEditor();
+  initTinyMCE();
 });
 
 const language = computed(() => {
@@ -72,20 +74,56 @@ function clearEditor() {
   }
 }
 
-function initTinyMCE() {
+async function initTinyMCE() {
+  const token = ++initToken;
+  showLoading.value = !window.tinymce;
+
+  try {
+    await loadTinyMCE();
+  } catch (e) {
+    showLoading.value = false;
+    console.warn('TinyMCE 加载失败', e);
+    return;
+  }
+
+  if (token !== initToken) return;
+
+  showLoading.value = false;
+  await nextTick();
+
+  if (token !== initToken) return;
+  initEditor();
+}
+
+function loadTinyMCE() {
   if (window.tinymce) {
-    initEditor();
-  } else {
-    showLoading.value = true;
+    return Promise.resolve(window.tinymce);
+  }
+
+  if (window.__cloudMailTinyMCELoadPromise) {
+    return window.__cloudMailTinyMCELoadPromise;
+  }
+
+  window.__cloudMailTinyMCELoadPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = '/tinymce/tinymce.min.js';
-    script.onload = () => initEditor();
+    script.async = true;
+    script.onload = () => window.tinymce ? resolve(window.tinymce) : reject(new Error('TinyMCE not available'));
+    script.onerror = () => {
+      window.__cloudMailTinyMCELoadPromise = null;
+      reject(new Error('TinyMCE script failed to load'));
+    };
     document.head.appendChild(script);
-    showLoading.value = false;
-  }
+  });
+
+  return window.__cloudMailTinyMCELoadPromise;
 }
 
 function initEditor() {
+  if (!window.tinymce || !editorRef.value) {
+    return;
+  }
+
   window.tinymce.init({
     selector: `#${props.editorId}`,
     statusbar: false,
@@ -115,6 +153,10 @@ function initEditor() {
       ed.on('init', () => {
         ed.setContent(props.defValue);
         isInitialized.value = true;
+        if (pendingFocus) {
+          pendingFocus = false;
+          nextTick(() => ed.focus());
+        }
       });
       ed.on('input change', () => {
         const content = ed.getContent();
@@ -158,17 +200,24 @@ function initEditor() {
 }
 
 function focus() {
+  if (!editor.value) {
+    pendingFocus = true;
+    return;
+  }
+
   nextTick(() => {
-    editor.value.focus()
+    editor.value?.focus()
   })
 }
 
 function getContent() {
-  return editor.value.getContent()
+  return editor.value?.getContent() || ''
 }
 
 
 function destroyEditor() {
+  initToken++;
+  isInitialized.value = false;
   if (editor.value) {
     editor.value.destroy();
     editor.value = null;

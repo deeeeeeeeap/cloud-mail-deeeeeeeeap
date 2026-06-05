@@ -18,27 +18,55 @@
       </el-main>
     </el-container>
   </el-container>
-  <writer ref="writerRef" />
+  <component :is="WriterComponent" v-if="writerMounted && WriterComponent" ref="writerRef" />
 </template>
 
 <script setup>
 import Aside from '@/layout/aside/index.vue'
 import Header from '@/layout/header/index.vue'
 import Main from '@/layout/main/index.vue'
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, shallowRef } from 'vue'
 import {useUiStore} from "@/store/ui.js";
-import writer from '@/layout/write/index.vue'
 
 const uiStore = useUiStore();
-const writerRef = ref({})
+const WriterComponent = shallowRef(null)
+const writerMounted = ref(false)
+const writerRef = ref(null)
 const isMobile = ref(window.innerWidth < 1025)
+let writerLoadPromise = null
+
+const writerApi = {
+  open: (...args) => callWriter('open', ...args),
+  openReply: (...args) => callWriter('openReply', ...args),
+  openForward: (...args) => callWriter('openForward', ...args),
+  openDraft: (...args) => callWriter('openDraft', ...args)
+}
+
 const handleResize = () => {
   isMobile.value = window.innerWidth < 1025
   uiStore.asideShow = window.innerWidth > 1024;
 }
 
+async function loadWriter() {
+  if (!WriterComponent.value) {
+    writerLoadPromise ||= import('@/layout/write/index.vue').then(module => {
+      WriterComponent.value = module.default
+    })
+    await writerLoadPromise
+  }
+
+  writerMounted.value = true
+  await nextTick()
+  return writerRef.value
+}
+
+async function callWriter(method, ...args) {
+  const writer = await loadWriter()
+  writer?.[method]?.(...args)
+}
+
 onMounted(() => {
-  uiStore.writerRef = writerRef
+  uiStore.writerRef = writerApi
 
   window.addEventListener('resize', handleResize)
   handleResize()
