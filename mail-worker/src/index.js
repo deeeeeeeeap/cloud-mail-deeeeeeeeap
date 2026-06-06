@@ -3,10 +3,24 @@ import { email } from './email/email';
 import userService from './service/user-service';
 import verifyRecordService from './service/verify-record-service';
 import emailService from './service/email-service';
-import kvObjService from './service/kv-obj-service';
 import oauthService from "./service/oauth-service";
 import analysisService from './service/analysis-service';
 import attService from './service/att-service';
+import r2Service from './service/r2-service';
+
+async function objectResponse(c, key) {
+	const obj = await r2Service.getObj(c, key);
+	return r2Service.toResponse(obj) || new Response('Not found', { status: 404 });
+}
+
+async function runScheduledTask(name, task) {
+	try {
+		await task();
+	} catch (e) {
+		console.error(`Scheduled task ${name} failed:`, e?.message || e);
+	}
+}
+
 export default {
 	 async fetch(req, env, ctx) {
 
@@ -23,11 +37,11 @@ export default {
 			 if (await attService.isPubliclyProtectedKey({ env }, key)) {
 				 return new Response('Not found', { status: 404 });
 			 }
-			 return await kvObjService.toObjResp( { env }, key);
+			 return await objectResponse({ env }, key);
 		 }
 
 		 if (url.pathname.startsWith('/static/')) {
-			 return await kvObjService.toObjResp( { env }, url.pathname.substring(1));
+			 return await objectResponse({ env }, url.pathname.substring(1));
 		 }
 
 		return env.assets.fetch(req);
@@ -35,14 +49,14 @@ export default {
 	email: email,
 	async scheduled(c, env, ctx) {
 		if (c.cron === '*/30 * * * *') {
-			await analysisService.refreshEchartsCache({ env })
+			await runScheduledTask('analysis-cache', () => analysisService.refreshEchartsCache({ env }))
 			return;
 		}
 
-		await verifyRecordService.clearRecord({ env })
-		await userService.resetDaySendCount({ env })
-		await emailService.completeReceiveAll({ env })
-		await oauthService.clearNoBindOathUser({ env })
-		await analysisService.refreshEchartsCache({ env })
+		await runScheduledTask('verify-record-clear', () => verifyRecordService.clearRecord({ env }))
+		await runScheduledTask('reset-day-send-count', () => userService.resetDaySendCount({ env }))
+		await runScheduledTask('complete-receive-all', () => emailService.completeReceiveAll({ env }))
+		await runScheduledTask('clear-unbound-oauth-users', () => oauthService.clearNoBindOathUser({ env }))
+		await runScheduledTask('analysis-cache', () => analysisService.refreshEchartsCache({ env }))
 	},
 };

@@ -13,6 +13,7 @@ vi.mock('../src/service/r2-service', async () => {
 });
 
 const { default: r2Service } = await import('../src/service/r2-service');
+const { default: kvObjService } = await import('../src/service/kv-obj-service');
 const { default: attService } = await import('../src/service/att-service');
 const { default: worker } = await import('../src/index');
 
@@ -109,15 +110,19 @@ describe('attachment access control', () => {
 	it('keeps unregistered inline attachment and static object links compatible', async () => {
 		const recorder = createDbStub();
 		const ctx = createExecutionContext();
+		r2Service.getObj.mockImplementation(async (c, key) => new Response(
+			key.includes('inline-image') ? 'inline' : 'static',
+			{ headers: { 'Content-Type': 'text/plain' } }
+		));
 
 		const inlineResponse = await worker.fetch(
 			new Request('http://example.com/attachments/inline-image.png'),
-			{ ...testEnv, db: recorder.db, kv: createKvStub('inline') },
+			{ ...testEnv, db: recorder.db },
 			ctx
 		);
 		const staticResponse = await worker.fetch(
 			new Request('http://example.com/static/background/bg.png'),
-			{ ...testEnv, db: recorder.db, kv: createKvStub('static') },
+			{ ...testEnv, db: recorder.db },
 			ctx
 		);
 		await waitOnExecutionContext(ctx);
@@ -126,17 +131,45 @@ describe('attachment access control', () => {
 		expect(await inlineResponse.text()).toBe('inline');
 		expect(staticResponse.status).toBe(200);
 		expect(await staticResponse.text()).toBe('static');
+		expect(r2Service.getObj).toHaveBeenCalledWith(
+			expect.objectContaining({ env: expect.objectContaining({ db: recorder.db }) }),
+			'attachments/inline-image.png'
+		);
+		expect(r2Service.getObj).toHaveBeenCalledWith(
+			expect.objectContaining({ env: expect.objectContaining({ db: recorder.db }) }),
+			'static/background/bg.png'
+		);
 	});
 
 	it('returns 404 response for missing static objects', async () => {
 		const request = new Request('http://example.com/static/background/missing.jpeg');
 		const ctx = createExecutionContext();
+		r2Service.getObj.mockResolvedValue(null);
 
-		const response = await worker.fetch(request, { ...testEnv, kv: createMissingKvStub() }, ctx);
+		const response = await worker.fetch(request, { ...testEnv }, ctx);
 		await waitOnExecutionContext(ctx);
 
 		expect(response).toBeInstanceOf(Response);
 		expect(response.status).toBe(404);
+	});
+
+	it('does not serialize missing object metadata as null headers', async () => {
+		const response = await kvObjService.getObj({
+			env: {
+				kv: {
+					async getWithMetadata() {
+						return {
+							value: new TextEncoder().encode('object').buffer,
+							metadata: { contentType: 'text/plain' }
+						};
+					}
+				}
+			}
+		}, 'static/object.txt');
+
+		expect(response.headers.get('Content-Type')).toBe('text/plain');
+		expect(response.headers.get('Content-Disposition')).toBeNull();
+		expect(response.headers.get('Cache-Control')).toBeNull();
 	});
 
 	it('downloads an owned normal attachment through the authenticated service path', async () => {

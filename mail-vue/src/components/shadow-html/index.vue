@@ -64,7 +64,6 @@ function updateContent() {
         width: fit-content;
         height: fit-content;
         min-width: 100%;
-        ${bodyStyle ? bodyStyle : ''} /* 注入 body 的 style */
       }
 
       img:not(table img) {
@@ -77,6 +76,11 @@ function updateContent() {
       ${cleanedHtml}
     </div>
   `;
+
+  const shadowContent = shadowRoot.querySelector('.shadow-content');
+  if (bodyStyle && shadowContent) {
+    shadowContent.setAttribute('style', bodyStyle);
+  }
 
   shadowRoot.querySelectorAll('img, iframe').forEach(node => {
     node.setAttribute('loading', 'lazy');

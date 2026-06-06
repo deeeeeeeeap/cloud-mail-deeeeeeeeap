@@ -60,6 +60,9 @@ const publicService = {
 		const withContent = toBoolFlag(includeContent);
 
 		const query = orm(c).select(publicEmailSelect(withContent)).from(email)
+		if (isDel === undefined || isDel === null || isDel === '') {
+			isDel = 0;
+		}
 
 		if (!size) {
 			size = 20
@@ -110,7 +113,7 @@ const publicService = {
 		}
 
 		if (isDel || isDel === 0) {
-			conditions.push(eq(email.isDel, isDel))
+			conditions.push(eq(email.isDel, Number(isDel)))
 		}
 
 		if (conditions.length === 1) {

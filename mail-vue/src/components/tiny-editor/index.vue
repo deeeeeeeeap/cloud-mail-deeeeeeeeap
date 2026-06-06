@@ -41,6 +41,11 @@ const settingStore = useSettingStore();
 let initToken = 0;
 let pendingFocus = false;
 
+function assetUrl(path) {
+  const base = import.meta.env.BASE_URL || '/';
+  return `${base.replace(/\/?$/, '/')}${path.replace(/^\//, '')}`;
+}
+
 onMounted(() => {
   initTinyMCE();
 });
@@ -106,7 +111,7 @@ function loadTinyMCE() {
 
   window.__cloudMailTinyMCELoadPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = '/tinymce/tinymce.min.js';
+    script.src = assetUrl('tinymce/tinymce.min.js');
     script.async = true;
     script.onload = () => window.tinymce ? resolve(window.tinymce) : reject(new Error('TinyMCE not available'));
     script.onerror = () => {
@@ -133,7 +138,7 @@ function initEditor() {
     //remove_script_host: false, // 阻止删除 URL 中的域名
     forced_root_block: 'div',
     skin: `${uiStore.dark ? 'oxide-dark' : 'oxide'}`,
-    content_css: `/tinymce/css/index.css,${uiStore.dark ? 'dark' : 'default'}`,
+    content_css: `${assetUrl('tinymce/css/index.css')},${uiStore.dark ? 'dark' : 'default'}`,
     content_style: `:root {
          --scrollbar-track-color: ${uiStore.dark ? '#141414' : '#FFFFFF'};
          --scrollbar-thumb-color: ${uiStore.dark ? '#8D9095' : '#A8ABB2'};

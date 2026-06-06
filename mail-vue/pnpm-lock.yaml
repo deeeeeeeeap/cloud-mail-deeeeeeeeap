@@ -35,9 +35,6 @@ importers:
       element-plus:
         specifier: ^2.14.0
         version: 2.14.0(vue@3.5.34)
-      lodash-es:
-        specifier: ^4.18.1
-        version: 4.18.1
       nprogress:
         specifier: ^0.2.0
         version: 0.2.0

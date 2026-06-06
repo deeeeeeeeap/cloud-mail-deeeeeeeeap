@@ -136,21 +136,30 @@ function loadBackground(next) {
         const src = cvtR2Url(settingStore.settings.background);
 
         const img = new Image();
-        img.src = src;
+        let done = false;
+        let timeoutId;
+        const allow = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(timeoutId);
+            next();
+        };
 
         img.onload = () => {
-            next()
+            allow()
         };
 
         img.onerror = () => {
             console.warn("背景图片加载失败:", img.src);
-            next()
+            allow()
         };
 
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
             console.warn("背景加载超时，已放行");
-            next()
+            allow()
         }, 3000)
+
+        img.src = src;
 
     } else {
         next()

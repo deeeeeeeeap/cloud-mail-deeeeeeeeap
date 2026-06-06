@@ -1,4 +1,4 @@
-const BLOCKED_TAGS = new Set(['script', 'iframe', 'object', 'embed', 'link', 'meta', 'base']);
+const BLOCKED_TAGS = new Set(['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta', 'base', 'form']);
 const URL_ATTRS = new Set(['href', 'src', 'xlink:href', 'formaction']);
 
 export function sanitizeHtml(html = '') {
@@ -12,8 +12,14 @@ export function sanitizeHtml(html = '') {
 
 export function sanitizeStyleAttribute(style = '') {
   return String(style)
-      .replace(/expression\s*\([^)]*\)/gi, '')
-      .replace(/url\s*\(\s*(['"]?)\s*javascript:[^)]+\)/gi, '');
+      .split(';')
+      .map(item => item.trim())
+      .filter(Boolean)
+      .filter(item => !/<\/?style/i.test(item))
+      .filter(item => !/@import/i.test(item))
+      .filter(item => !/expression\s*\(/i.test(item))
+      .filter(item => !/url\s*\(/i.test(item))
+      .join('; ');
 }
 
 function sanitizeNode(root) {
@@ -60,5 +66,7 @@ function sanitizeNode(root) {
 
 function isUnsafeUrl(value) {
   const normalized = value.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
-  return normalized.startsWith('javascript:') || normalized.startsWith('data:text/html');
+  return normalized.startsWith('javascript:')
+      || normalized.startsWith('vbscript:')
+      || (normalized.startsWith('data:') && !normalized.startsWith('data:image/'));
 }

@@ -813,7 +813,7 @@ import {useAccountStore} from "@/store/account.js";
 import {Icon} from "@iconify/vue";
 import {cvtR2Url} from "@/utils/convert.js";
 import {storeToRefs} from "pinia";
-import {debounce} from 'lodash-es'
+import {debounce} from '@/utils/debounce.js'
 import {isDomain, isEmail} from "@/utils/verify-utils.js";
 import loading from "@/components/loading/index.vue";
 import {getTextWidth} from "@/utils/text.js";

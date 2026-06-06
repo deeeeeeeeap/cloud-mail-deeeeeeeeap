@@ -1,12 +1,11 @@
-import { parseHTML } from 'linkedom';
 import domainUtils from '../utils/domain-uitls';
+import { jsStringLiteral, sanitizeEmailHtml } from '../utils/html-sanitize';
 
 export default function emailHtmlTemplate(html, domain) {
 
-	const { document } = parseHTML(html);
-	document.querySelectorAll('script').forEach(script => script.remove());
-	html = document.toString();
+	html = sanitizeEmailHtml(html);
 	html = html.replace(/{{domain}}/g, domainUtils.toOssDomain(domain) + '/');
+	const htmlLiteral = jsStringLiteral(html);
 
 	return `<!DOCTYPE html>
 <html lang='en' >
@@ -89,7 +88,6 @@ export default function emailHtmlTemplate(html, domain) {
                         width: fit-content;
                         height: fit-content;
                         min-width: 100%;
-                        \${bodyStyle ? bodyStyle : ''} /* 注入 body 的 style */
                     }
 
                     img:not(table img) {
@@ -101,6 +99,13 @@ export default function emailHtmlTemplate(html, domain) {
                     \${cleanedHtml}
                 </div>
             \`;
+
+            if (bodyStyle) {
+                const shadowContent = shadowRoot.querySelector('.shadow-content');
+                if (shadowContent) {
+                    shadowContent.setAttribute('style', bodyStyle);
+                }
+            }
 
             // 自动缩放
             autoScale(shadowRoot, container);
@@ -127,7 +132,7 @@ export default function emailHtmlTemplate(html, domain) {
         }
 
         // 使用示例
-        const exampleHtml = \`${html}\`;
+        const exampleHtml = ${htmlLiteral};
 
         // 渲染HTML
         renderHTML(exampleHtml);

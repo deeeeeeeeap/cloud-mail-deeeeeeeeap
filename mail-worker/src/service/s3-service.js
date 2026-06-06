@@ -2,6 +2,25 @@ import { S3Client, PutObjectCommand, DeleteObjectsCommand, GetObjectCommand } fr
 import settingService from './setting-service';
 import domainUtils from '../utils/domain-uitls';
 import { settingConst } from '../const/entity-const';
+
+function isMissingObjectError(error) {
+	return error?.$metadata?.httpStatusCode === 404
+		|| error?.name === 'NoSuchKey'
+		|| error?.name === 'NotFound';
+}
+
+function objectHeaders(result) {
+	const headers = new Headers();
+	headers.set('Content-Type', result.ContentType || 'application/octet-stream');
+	if (result.ContentDisposition) {
+		headers.set('Content-Disposition', result.ContentDisposition);
+	}
+	if (result.CacheControl) {
+		headers.set('Cache-Control', result.CacheControl);
+	}
+	return headers;
+}
+
 const s3Service = {
 
 	async putObj(c, key, content, metadata) {
@@ -78,18 +97,19 @@ const s3Service = {
 	async getObj(c, key) {
 		const client = await this.client(c);
 		const { bucket } = await settingService.query(c);
-		const result = await client.send(new GetObjectCommand({
-			Bucket: bucket,
-			Key: key
-		}));
+		try {
+			const result = await client.send(new GetObjectCommand({
+				Bucket: bucket,
+				Key: key
+			}));
 
-		return new Response(result.Body, {
-			headers: {
-				'Content-Type': result.ContentType || 'application/octet-stream',
-				'Content-Disposition': result.ContentDisposition || null,
-				'Cache-Control': result.CacheControl || null
+			return new Response(result.Body, { headers: objectHeaders(result) });
+		} catch (e) {
+			if (isMissingObjectError(e)) {
+				return null;
 			}
-		});
+			throw e;
+		}
 	},
 
 

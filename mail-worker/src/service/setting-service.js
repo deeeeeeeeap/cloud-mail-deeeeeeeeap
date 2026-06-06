@@ -25,6 +25,9 @@ function normalizeSettingRow(settingRow) {
 	if (typeof settingRow.resendTokens === 'string') {
 		settingRow.resendTokens = JSON.parse(settingRow.resendTokens || '{}');
 	}
+	if (!settingRow.resendTokens || typeof settingRow.resendTokens !== 'object' || Array.isArray(settingRow.resendTokens)) {
+		settingRow.resendTokens = {};
+	}
 
 	return settingRow;
 }
@@ -60,7 +63,12 @@ const settingService = {
 		if (settingCache && settingCache.expiresAt > Date.now()) {
 			settingData = cloneSetting(settingCache.value);
 		} else {
-			settingData = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
+			try {
+				settingData = normalizeSettingRow(await c.env.kv.get(KvConst.SETTING, { type: 'json' }));
+			} catch (e) {
+				console.warn(`Unable to read settings cache from KV: ${e.message}`);
+				settingData = null;
+			}
 			if (settingData) {
 				settingCache = {
 					value: cloneSetting(settingData),
@@ -98,6 +106,10 @@ const settingService = {
 			throw new BizError(t('noDomainVariable'));
 		}
 
+		if (!Array.isArray(domainList)) {
+			throw new BizError(t('notJsonDomain'));
+		}
+
 		domainList = domainList.map(item => '@' + item);
 		settingData.domainList = domainList;
 
@@ -127,7 +139,7 @@ const settingService = {
 		settingData.linuxdoCallbackUrl = c.env.linuxdo_callback_url;
 		settingData.linuxdoSwitch = linuxdoSwitch;
 
-		settingData.emailPrefixFilter = settingData.emailPrefixFilter.split(",").filter(Boolean);
+		settingData.emailPrefixFilter = String(settingData.emailPrefixFilter || '').split(",").filter(Boolean);
 
 		c.set?.('setting', settingData);
 		return settingData;

@@ -2,9 +2,15 @@ name: 🚀 Deploy cloud-mail to Cloudflare Workers
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_legacy_deploy:
+        description: "Type true to run legacy GitHub Actions deploy"
+        required: true
+        default: "false"
 
 jobs:
   Deploy-cloud-mail:
+    if: ${{ inputs.confirm_legacy_deploy == 'true' }}
     name: 🏗️ Build and Deploy
     runs-on: ubuntu-latest
 

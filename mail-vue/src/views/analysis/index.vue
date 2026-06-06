@@ -126,7 +126,7 @@ import echarts from "@/echarts/index.js";
 import dayjs from "dayjs";
 import {analysisEcharts} from "@/request/analysis.js";
 import {useUiStore} from "@/store/ui.js";
-import {debounce} from "lodash-es";
+import {debounce} from "@/utils/debounce.js";
 import loading from "@/components/loading/index.vue";
 import {useRoute} from "vue-router";
 import {useI18n} from 'vue-i18n';
