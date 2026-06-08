@@ -320,45 +320,21 @@ const emailService = {
 
 		}
 
-		let sendResult = {};
+		attachments = Array.isArray(attachments) ? attachments : [];
 
-		//存在站外邮箱时，如果配置了 Cloudflare Email Service 就优先使用，否则使用 Resend
-		if (!allInternal) {
-
-			if (useCloudflareEmail) {
-				sendResult = await this.sendByCloudflareEmail(c, {
-					name,
-					accountEmail: accountRow.email,
-					receiveEmail,
-					subject,
-					text,
-					html,
-					attachments: [...imageDataList, ...attachments],
-					sendType,
-					messageId: emailRow.messageId
-				});
-			} else {
-				sendResult = await this.sendByResend(resendToken, {
-					name,
-					accountEmail: accountRow.email,
-					receiveEmail,
-					subject,
-					text,
-					html,
-					attachments: [...imageDataList, ...attachments],
-					sendType,
-					messageId: emailRow.messageId
-				});
-			}
-
+		if (imageDataList.length > 10) {
+			throw new BizError(t('imageAttLimit'));
 		}
 
-		const { data, error } = sendResult;
-
-
-		if (error) {
-			throw new BizError(error.message);
+		if (attachments.length > 10) {
+			throw new BizError(t('attLimit'));
 		}
+
+		const providerAttachments = [
+			...imageDataList.map(item => ({ ...item })),
+			...attachments.map(item => ({ ...item }))
+		];
+		const providerHtml = html;
 
 		imageDataList = imageDataList.map(item => ({...item, contentId: `<${item.contentId}>`}))
 
@@ -373,10 +349,10 @@ const emailService = {
 		emailData.content = html;
 		emailData.text = text;
 		emailData.accountId = accountId;
-		emailData.status = useCloudflareEmail ? emailConst.status.DELIVERED : emailConst.status.SENT;
+		emailData.status = emailConst.status.SAVING;
 		emailData.type = emailConst.type.SEND;
 		emailData.userId = userId;
-		emailData.resendEmailId = data?.id;
+		emailData.resendEmailId = null;
 
 		const recipient = [];
 
@@ -391,51 +367,120 @@ const emailService = {
 			emailData.relation = emailRow.messageId;
 		}
 
-		//如果权限有发送次数增加用户发送次数
-		if (roleRow.sendCount && roleRow.sendType !== 'internal') {
-			await userService.incrUserSendCount(c, receiveEmail.length, userId);
-		}
-
 		//保存到数据库并返回结果
 		const emailResult = await orm(c).insert(email).values(emailData).returning().get();
 		await emailSearchService.syncEmailIds(c, [emailResult.emailId]);
 
 		//保存内嵌附件
 		if (imageDataList.length > 0) {
-			if (imageDataList.length > 10) {
-				throw new BizError(t('imageAttLimit'));
-			}
 			await attService.saveArticleAtt(c, imageDataList, userId, accountId, emailResult.emailId);
 		}
 
 		//保存普通附件
 		if (attachments?.length > 0) {
-			if (attachments.length > 10) {
-				throw new BizError(t('attLimit'));
-			}
 			await attService.saveSendAtt(c, attachments, userId, accountId, emailResult.emailId);
 		}
 
 		const attList = await attService.selectByEmailIds(c, [emailResult.emailId]);
 		emailResult.attList = attList;
 
+		if (!allInternal) {
+			const sendResult = await this.sendExternalProvider(c, {
+				useCloudflareEmail,
+				resendToken,
+				name,
+				accountEmail: accountRow.email,
+				receiveEmail,
+				subject,
+				text,
+				html: providerHtml,
+				attachments: providerAttachments,
+				sendType,
+				messageId: emailRow.messageId,
+				emailId: emailResult.emailId
+			});
+
+			emailResult.status = useCloudflareEmail ? emailConst.status.DELIVERED : emailConst.status.SENT;
+			emailResult.resendEmailId = sendResult.data?.id;
+		}
+
 		//如果全是站内接收方，直接写入数据库
 		if (allInternal) {
 			await this.HandleOnSiteEmail(c, receiveEmail, emailResult, attList);
 		}
 
-		const dateStr = dayjs().format('YYYY-MM-DD');
-		let daySendTotal = await c.env.kv.get(kvConst.SEND_DAY_COUNT + dateStr);
-
-		//记录每天发件次数统计
-		if (!daySendTotal) {
-			await c.env.kv.put(kvConst.SEND_DAY_COUNT + dateStr, JSON.stringify(receiveEmail.length), { expirationTtl: 60 * 60 * 24 });
-		} else  {
-			daySendTotal = Number(daySendTotal) + receiveEmail.length
-			await c.env.kv.put(kvConst.SEND_DAY_COUNT + dateStr, JSON.stringify(daySendTotal), { expirationTtl: 60 * 60 * 24 });
-		}
+		await this.recordSendMetrics(c, { roleRow, receiveEmail, userId });
 
 		return [ emailResult ];
+	},
+
+	async sendExternalProvider(c, params) {
+		let sendResult = {};
+
+		try {
+			if (params.useCloudflareEmail) {
+				sendResult = await this.sendByCloudflareEmail(c, params);
+			} else {
+				sendResult = await this.sendByResend(params.resendToken, params);
+			}
+		} catch (e) {
+			await this.markSendFailed(c, params.emailId, e?.message || String(e));
+			throw e instanceof BizError ? e : new BizError(e?.message || String(e));
+		}
+
+		const { data, error } = sendResult;
+
+		if (error) {
+			await this.markSendFailed(c, params.emailId, error.message);
+			throw new BizError(error.message);
+		}
+
+		const status = params.useCloudflareEmail ? emailConst.status.DELIVERED : emailConst.status.SENT;
+		const updateData = { status, message: '' };
+		if (data?.id) {
+			updateData.resendEmailId = data.id;
+		}
+
+		try {
+			await orm(c).update(email).set(updateData).where(eq(email.emailId, params.emailId)).run();
+			await emailSearchService.syncEmailIds(c, [params.emailId]);
+		} catch (e) {
+			console.error(`Post-send status update failed for email ${params.emailId}:`, e?.message || e);
+		}
+
+		return { data: data || {} };
+	},
+
+	async markSendFailed(c, emailId, message) {
+		try {
+			await orm(c).update(email).set({
+				status: emailConst.status.FAILED,
+				message
+			}).where(eq(email.emailId, emailId)).run();
+			await emailSearchService.syncEmailIds(c, [emailId]);
+		} catch (e) {
+			console.error(`Failed to mark outbound email ${emailId} as failed:`, e?.message || e);
+		}
+	},
+
+	async recordSendMetrics(c, { roleRow, receiveEmail, userId }) {
+		try {
+			if (roleRow.sendCount && roleRow.sendType !== 'internal') {
+				await userService.incrUserSendCount(c, receiveEmail.length, userId);
+			}
+
+			const dateStr = dayjs().format('YYYY-MM-DD');
+			let daySendTotal = await c.env.kv.get(kvConst.SEND_DAY_COUNT + dateStr);
+
+			if (!daySendTotal) {
+				await c.env.kv.put(kvConst.SEND_DAY_COUNT + dateStr, JSON.stringify(receiveEmail.length), { expirationTtl: 60 * 60 * 24 });
+			} else  {
+				daySendTotal = Number(daySendTotal) + receiveEmail.length
+				await c.env.kv.put(kvConst.SEND_DAY_COUNT + dateStr, JSON.stringify(daySendTotal), { expirationTtl: 60 * 60 * 24 });
+			}
+		} catch (e) {
+			console.error('Post-send metrics update failed:', e?.message || e);
+		}
 	},
 
 	async sendByCloudflareEmail(c, params) {
@@ -1094,18 +1139,18 @@ const emailService = {
 		const { results: pendingRows = [] } = await c.env.db.prepare(`
 			SELECT email_id AS emailId
 			FROM email
-			WHERE status = ? AND is_del = ?
-		`).bind(emailConst.status.SAVING, isDel.NORMAL).all();
+			WHERE status = ? AND is_del = ? AND type = ?
+		`).bind(emailConst.status.SAVING, isDel.NORMAL, emailConst.type.RECEIVE).all();
 		await c.env.db.prepare(`
 			UPDATE email as e
 			SET status = ?
-			WHERE status = ? AND is_del = ? AND EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)
-		`).bind(emailConst.status.RECEIVE, emailConst.status.SAVING, isDel.NORMAL).run();
+			WHERE status = ? AND is_del = ? AND type = ? AND EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)
+		`).bind(emailConst.status.RECEIVE, emailConst.status.SAVING, isDel.NORMAL, emailConst.type.RECEIVE).run();
 		await c.env.db.prepare(`
 			UPDATE email as e
 			SET status = ?
-			WHERE status = ? AND is_del = ? AND NOT EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)
-		`).bind(emailConst.status.NOONE, emailConst.status.SAVING, isDel.NORMAL).run();
+			WHERE status = ? AND is_del = ? AND type = ? AND NOT EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)
+		`).bind(emailConst.status.NOONE, emailConst.status.SAVING, isDel.NORMAL, emailConst.type.RECEIVE).run();
 		await emailSearchService.syncEmailIds(c, pendingRows.map(row => row.emailId));
 	},
 

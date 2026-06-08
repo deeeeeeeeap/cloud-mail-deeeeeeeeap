@@ -118,7 +118,7 @@ cloud-mail
 
 ## 重要环境变量
 
-不要把真实密钥提交到仓库。生产环境建议放在 Cloudflare 变量或 GitHub Secrets / Variables。
+不要把真实密钥提交到仓库。生产敏感值建议放在 Cloudflare Workers Secrets 或 GitHub Secrets；普通非敏感配置再放变量。
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
@@ -208,10 +208,10 @@ cd mail-worker
 corepack pnpm wrangler deploy
 ```
 
-首次部署后访问初始化接口：
+首次部署后用 POST 初始化数据库，不要把 `jwt_secret` 放在 URL 里：
 
-```text
-https://你的域名/api/init/你的 jwt_secret
+```bash
+curl -X POST -H "X-Cloud-Mail-Init-Secret: 你的 jwt_secret" https://你的域名/api/init
 ```
 
 初始化完成后进入后台设置域名、管理员、Resend、公告、验证码识别等配置。
@@ -230,7 +230,7 @@ node scripts/cloudflare-workers-git-deploy.mjs
 node ../scripts/cloudflare-workers-git-deploy.mjs
 ```
 
-这个脚本会生成临时 `.wrangler/cloud-mail.generated.wrangler.jsonc`，用环境变量显式写入 D1 / KV / R2 绑定，然后调用 Wrangler 部署。建议在 Cloudflare 项目的构建变量中配置：
+这个脚本会先显式构建 `mail-worker/dist`，再生成临时 `.wrangler/cloud-mail.generated.wrangler.jsonc`，用环境变量显式写入 D1 / KV / R2 绑定，然后调用 Wrangler 部署。建议在 Cloudflare 项目的构建变量中配置：
 
 - `D1_DATABASE_NAME`，默认 `mail`
 - `D1_DATABASE_ID`
@@ -302,7 +302,7 @@ npx wrangler deploy
 2. 生成 `wrangler-action.toml`。
 3. 检查或填充 D1 / KV 绑定。
 4. 构建前端并部署 Worker。
-5. 调用 `/api/init/{JWT_SECRET}` 初始化数据库。
+5. 通过 `POST /api/init` 和 `X-Cloud-Mail-Init-Secret` header 初始化数据库。
 
 ### 首次部署检查清单
 
@@ -310,8 +310,8 @@ npx wrangler deploy
 
 1. Cloudflare 构建日志中没有 `Framework: Static` / `Output Directory: mail-vue` / `Create wrangler.jsonc` 这类误识别提示。
 2. Wrangler 输出的绑定里能看到 `env.db`、`env.kv`、`env.assets`。
-3. 已在 Cloudflare Worker 变量/密钥中配置 `domain`、`admin`、`jwt_secret` 等运行时变量。
-4. 访问 `https://你的域名/api/init/你的 jwt_secret`，返回 `success`。
+3. 已在 Cloudflare Worker 变量/密钥中配置 `domain`、`admin`、`jwt_secret` 等运行时变量，其中敏感值使用 Secrets。
+4. 执行 `curl -X POST -H "X-Cloud-Mail-Init-Secret: 你的 jwt_secret" https://你的域名/api/init`，返回 `success`。
 5. 登录后台，进入维护中心，检查 D1 / KV / R2 / AI / 发信绑定状态。
 6. 如提示缺字段、缺索引或缺搜索表，按顺序执行“补齐数据库结构”“补齐索引”“重建搜索表”。
 7. 进入系统设置，配置域名、管理员、Resend、公告、验证码识别等业务选项。

@@ -11,8 +11,10 @@ import jwtUtils from '../utils/jwt-utils';
 import emailMsgTemplate from '../template/email-msg';
 import emailTextTemplate from '../template/email-text';
 import emailHtmlTemplate from '../template/email-html';
-import verifyUtils from '../utils/verify-utils';
 import domainUtils from "../utils/domain-uitls";
+
+const TELEGRAM_EMAIL_VIEW_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+const TELEGRAM_EMAIL_VIEW_PURPOSE = 'telegram-email-view';
 
 const telegramService = {
 
@@ -22,7 +24,7 @@ const telegramService = {
 
 		const result = await jwtUtils.verifyToken(c, token);
 
-		if (!result) {
+		if (!result || result.purpose !== TELEGRAM_EMAIL_VIEW_PURPOSE || !result.emailId) {
 			return emailTextTemplate('Access denied')
 		}
 
@@ -49,7 +51,10 @@ const telegramService = {
 
 		const tgChatIds = tgChatId.split(',');
 
-		const jwtToken = await jwtUtils.generateToken(c, { emailId: email.emailId })
+		const jwtToken = await jwtUtils.generateToken(c, {
+			emailId: email.emailId,
+			purpose: TELEGRAM_EMAIL_VIEW_PURPOSE
+		}, TELEGRAM_EMAIL_VIEW_TOKEN_TTL_SECONDS)
 
 		const webAppUrl = customDomain ? `${domainUtils.toOssDomain(customDomain)}/api/telegram/getEmail/${jwtToken}` : 'https://www.cloudflare.com/404'
 		const inlineKeyboard = [

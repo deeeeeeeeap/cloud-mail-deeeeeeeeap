@@ -4,13 +4,15 @@ import {emailConst} from "../const/entity-const";
 import secretUtils from '../utils/secret-utils';
 import { EMAIL_SEARCH_BODY_LIMIT } from '../service/email-search-service';
 
+export const INIT_SECRET_HEADER = 'X-Cloud-Mail-Init-Secret';
+
 const dbInit = {
 	async init(c) {
 
-		const secret = c.req.param('secret');
+		const secret = c.req.header(INIT_SECRET_HEADER);
 
 		if (!await secretUtils.timingSafeEqual(secret, c.env.jwt_secret)) {
-			return c.text('❌ JWT secret mismatch');
+			return c.text('JWT secret mismatch', 401);
 		}
 
 		await this.intDB(c);

@@ -6,6 +6,9 @@ import { emailConst } from '../const/entity-const';
 import kvConst from '../const/kv-const';
 import dayjs from 'dayjs';
 import { toUtc } from '../utils/date-uitil';
+
+const ANALYSIS_REFRESH_CONCURRENCY = 3;
+
 const analysisService = {
 
 	async echarts(c, params) {
@@ -23,9 +26,9 @@ const analysisService = {
 		return await this.refreshEchartsCacheByKey(c, cacheKey);
 	},
 
-	async refreshEchartsCacheByKey(c, cacheKey) {
+	async refreshEchartsCacheByKey(c, cacheKey, options = {}) {
 		const params = this.echartsParamsByCacheKey(cacheKey);
-		const data = await this.queryEcharts(c, params);
+		const data = await this.queryEcharts(c, params, options);
 		await c.env.kv.put(cacheKey, JSON.stringify(data));
 		return data;
 	},
@@ -35,15 +38,29 @@ const analysisService = {
 			return;
 		}
 
-		const { keys } = await c.env.kv.list({ prefix: kvConst.ANALYSIS_ECHARTS });
+		const numberCount = await this.refreshNumberCountCache(c);
+		let cursor;
 
-		await Promise.all([
-			...keys.map(key => this.refreshEchartsCacheByKey(c, key.name)),
-			this.numberCount(c)
-		]);
+		do {
+			const page = await c.env.kv.list({ prefix: kvConst.ANALYSIS_ECHARTS, cursor });
+			const keys = page.keys || [];
+
+			await this.mapLimit(keys, ANALYSIS_REFRESH_CONCURRENCY, async key => {
+				try {
+					await this.refreshEchartsCacheByKey(c, key.name, { numberCount });
+				} catch (e) {
+					console.error(`Refresh analysis cache failed for ${key.name}:`, e?.message || e);
+				}
+			});
+
+			if (page.list_complete || !page.cursor) {
+				break;
+			}
+			cursor = page.cursor;
+		} while (cursor);
 	},
 
-	async queryEcharts(c, params) {
+	async queryEcharts(c, params, options = {}) {
 
 		const { timeZone } = params;
 
@@ -67,7 +84,7 @@ const analysisService = {
 			sendDayCountRaw,
 			daySendTotalRaw
 		] = await Promise.all([
-			this.numberCount(c),
+			options.numberCount ?? this.numberCount(c),
 
 			orm(c)
 				.select({ name: email.name, total: count() })
@@ -118,6 +135,16 @@ const analysisService = {
 
 		const data = await analysisDao.numberCount(c);
 		await c.env.kv.put(kvConst.ANALYSIS_NUMBER_COUNT, JSON.stringify(data), { expirationTtl: 60 });
+		return data;
+	},
+
+	async refreshNumberCountCache(c) {
+		const data = await analysisDao.numberCount(c);
+
+		if (this.analysisCacheEnabled(c)) {
+			await c.env.kv.put(kvConst.ANALYSIS_NUMBER_COUNT, JSON.stringify(data), { expirationTtl: 60 });
+		}
+
 		return data;
 	},
 
@@ -185,6 +212,19 @@ const analysisService = {
 
 	analysisCacheEnabled(c) {
 		return c.env.analysis_cache === true || c.env.analysis_cache === 'true';
+	},
+
+	async mapLimit(items, limit, mapper) {
+		let index = 0;
+		const workerCount = Math.min(limit, items.length);
+		const workers = Array.from({ length: workerCount }, async () => {
+			while (index < items.length) {
+				const item = items[index++];
+				await mapper(item);
+			}
+		});
+
+		await Promise.all(workers);
 	}
 }
 

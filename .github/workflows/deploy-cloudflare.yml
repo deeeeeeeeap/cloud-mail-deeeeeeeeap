@@ -19,8 +19,8 @@ jobs:
       CUSTOM_DOMAIN: ${{ secrets.CUSTOM_DOMAIN || vars.CUSTOM_DOMAIN }}
       DOMAIN: ${{ secrets.DOMAIN || vars.DOMAIN }}
       ADMIN: ${{ secrets.ADMIN || vars.ADMIN }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
       D1_DATABASE_NAME: ${{ secrets.D1_DATABASE_NAME || vars.D1_DATABASE_NAME || 'mail' }}
       D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID || vars.D1_DATABASE_ID }}
@@ -31,11 +31,11 @@ jobs:
       CF_EMAIL: ${{ secrets.CF_EMAIL || vars.CF_EMAIL || false }}
       ANALYSIS_CACHE: ${{ secrets.ANALYSIS_CACHE || vars.ANALYSIS_CACHE || false }}
       LINUXDO_CLIENT_ID: ${{ secrets.LINUXDO_CLIENT_ID || vars.LINUXDO_CLIENT_ID }}
-      LINUXDO_CLIENT_SECRET: ${{ secrets.LINUXDO_CLIENT_SECRET || vars.LINUXDO_CLIENT_SECRET }}
+      LINUXDO_CLIENT_SECRET: ${{ secrets.LINUXDO_CLIENT_SECRET }}
       LINUXDO_CALLBACK_URL: ${{ secrets.LINUXDO_CALLBACK_URL || vars.LINUXDO_CALLBACK_URL }}
       LINUXDO_SWITCH: ${{ secrets.LINUXDO_SWITCH || vars.LINUXDO_SWITCH }}
       CORS_ORIGINS: ${{ secrets.CORS_ORIGINS || vars.CORS_ORIGINS }}
-      RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET || vars.RESEND_WEBHOOK_SECRET }}
+      RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET }}
       RESEND_WEBHOOK_ALLOW_UNSIGNED: ${{ secrets.RESEND_WEBHOOK_ALLOW_UNSIGNED || vars.RESEND_WEBHOOK_ALLOW_UNSIGNED }}
 
 
@@ -75,8 +75,8 @@ jobs:
           
           echo "🔐 Starting environment setup..."
           
-          if [ -z "$JWT_SECRET" ] || grep -q '[?%#/\\]' <<< "$JWT_SECRET"; then
-            echo "❌ JWT_SECRET variable is empty or contains invalid characters (?, %, #, /, \\)."
+          if [ -z "$JWT_SECRET" ]; then
+            echo "❌ JWT_SECRET secret cannot be empty."
             exit 1
           fi
           
@@ -135,18 +135,15 @@ jobs:
           sed -i "s|\${CUSTOM_DOMAIN}|${CUSTOM_DOMAIN}|g" "$CONFIG_FILE"
           sed -i "s|\"\${DOMAIN}\"|${DOMAIN}|g" "$CONFIG_FILE"
           sed -i "s|\${ADMIN}|${ADMIN}|g" "$CONFIG_FILE"
-          sed -i "s|\${JWT_SECRET}|${JWT_SECRET}|g" "$CONFIG_FILE"
           sed -i "s|\${D1_DATABASE_NAME}|${D1_DATABASE_NAME}|g" "$CONFIG_FILE"
           sed -i "s|\${R2_BUCKET_NAME}|${R2_BUCKET_NAME}|g" "$CONFIG_FILE"
           sed -i "s|\${PROJECT_LINK}|${PROJECT_LINK}|g" "$CONFIG_FILE"
           sed -i "s|\${ANALYSIS_CACHE}|${ANALYSIS_CACHE}|g" "$CONFIG_FILE"
           sed -i "s|\${AI_MODEL}|${AI_MODEL}|g" "$CONFIG_FILE"
           sed -i "s|\${LINUXDO_CLIENT_ID}|${LINUXDO_CLIENT_ID}|g" "$CONFIG_FILE"
-          sed -i "s|\${LINUXDO_CLIENT_SECRET}|${LINUXDO_CLIENT_SECRET}|g" "$CONFIG_FILE"
           sed -i "s|\${LINUXDO_CALLBACK_URL}|${LINUXDO_CALLBACK_URL}|g" "$CONFIG_FILE"
           sed -i "s|\${LINUXDO_SWITCH}|${LINUXDO_SWITCH}|g" "$CONFIG_FILE"
           sed -i "s|\${CORS_ORIGINS}|${CORS_ORIGINS}|g" "$CONFIG_FILE"
-          sed -i "s|\${RESEND_WEBHOOK_SECRET}|${RESEND_WEBHOOK_SECRET}|g" "$CONFIG_FILE"
           sed -i "s|\${RESEND_WEBHOOK_ALLOW_UNSIGNED}|${RESEND_WEBHOOK_ALLOW_UNSIGNED}|g" "$CONFIG_FILE"
           
           echo "✅ Environment setup completed."
@@ -252,6 +249,19 @@ jobs:
           echo "worker_url=$WORKER_URL" >> $GITHUB_OUTPUT
           echo "✅ Setup completed."
 
+      - name: 🔐 设置运行时密钥 / Set runtime secrets
+        working-directory: ./mail-worker
+        run: |
+          printf '%s' "$JWT_SECRET" | pnpm wrangler secret put jwt_secret -c wrangler-action.toml
+
+          if [ -n "$LINUXDO_CLIENT_SECRET" ]; then
+            printf '%s' "$LINUXDO_CLIENT_SECRET" | pnpm wrangler secret put linuxdo_client_secret -c wrangler-action.toml
+          fi
+
+          if [ -n "$RESEND_WEBHOOK_SECRET" ]; then
+            printf '%s' "$RESEND_WEBHOOK_SECRET" | pnpm wrangler secret put resend_webhook_secret -c wrangler-action.toml
+          fi
+
       - name: ♻️ 初始化数据库 / Initialize database
         run: |
           echo "🛠️ Starting database initialization..."
@@ -265,7 +275,7 @@ jobs:
             exit 1
           fi
           
-          HTTP_CODE=$(curl -sL -w "%{http_code}" -o response.txt "$WORKER_URL/api/init/${JWT_SECRET}")
+          HTTP_CODE=$(curl -sS -X POST -H "X-Cloud-Mail-Init-Secret: $JWT_SECRET" -w "%{http_code}" -o response.txt "$WORKER_URL/api/init")
           RESPONSE_BODY=$(cat response.txt)
 
           if [ "$RESPONSE_BODY" = "success" ]; then

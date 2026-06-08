@@ -1,7 +1,7 @@
 <template>
-  <div :class="accountShow && hasPerm('account:query') ? 'main-box-show' : 'main-box-hide'">
-    <div :class="accountShow && hasPerm('account:query') ? 'block-show' : 'block-hide'" @click="uiStore.accountShow = false"></div>
-    <account  :class="accountShow && hasPerm('account:query') ? 'show' : 'hide'" />
+  <div :class="shouldShowAccountPanel ? 'main-box-show' : 'main-box-hide'">
+    <div :class="shouldShowAccountPanel ? 'block-show' : 'block-hide'" @click="uiStore.accountShow = false"></div>
+    <AccountPanel v-if="accountPanelMounted && hasAccountQueryPerm" :class="shouldShowAccountPanel ? 'show' : 'hide'" />
     <router-view class="main-view" v-slot="{ Component,route }">
       <keep-alive :include="['email','all-email','send','sys-setting','star','user','role','analysis','reg-key','draft']">
         <component :is="Component" :key="route.name"/>
@@ -10,14 +10,14 @@
   </div>
 </template>
 <script setup>
-import account from '@/layout/account/index.vue'
 import {useUiStore} from "@/store/ui.js";
 import {useSettingStore} from "@/store/setting.js";
-import {computed, onBeforeUnmount, onMounted, watch} from "vue";
+import {computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import { useRoute } from 'vue-router'
 import { hasPerm } from "@/perm/perm.js"
 import {sanitizeHtml} from "@/utils/html-sanitize.js";
 
+const AccountPanel = defineAsyncComponent(() => import('@/layout/account/index.vue'))
 const settingStore = useSettingStore()
 const uiStore = useUiStore();
 const route = useRoute()
@@ -25,10 +25,23 @@ let  innerWidth =  window.innerWidth
 
 let elNotification = null
 const noticeStyleId = 'cloud-mail-notice-style'
+const accountPanelMounted = ref(false)
 
 const accountShow = computed(() => {
   return uiStore.accountShow && settingStore.settings.manyEmail === 0
 })
+
+const hasAccountQueryPerm = computed(() => hasPerm('account:query'))
+
+const shouldShowAccountPanel = computed(() => {
+  return accountShow.value && hasAccountQueryPerm.value
+})
+
+watch(shouldShowAccountPanel, (show) => {
+  if (show) {
+    accountPanelMounted.value = true
+  }
+}, {immediate: true})
 
 watch(() => uiStore.changeNotice, () => {
 

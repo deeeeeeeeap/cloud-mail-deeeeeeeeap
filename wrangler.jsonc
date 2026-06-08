@@ -36,6 +36,7 @@
     ]
   },
   "build": {
-    "command": "node -e \"const fs=require('fs'),cp=require('child_process');const script=fs.existsSync('scripts/cloudflare-workers-git-build.mjs')?'scripts/cloudflare-workers-git-build.mjs':'../scripts/cloudflare-workers-git-build.mjs';cp.execFileSync(process.execPath,[script],{stdio:'inherit'});\""
+    "command": "node scripts/cloudflare-workers-git-build.mjs",
+    "cwd": "."
   }
 }

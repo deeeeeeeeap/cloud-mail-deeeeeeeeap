@@ -8,7 +8,8 @@ const encoder = new TextEncoder();
 
 describe('security hardening', () => {
 	it('blocks cross-origin API requests by default', async () => {
-		const request = new Request('http://example.com/api/init/wrong-secret', {
+		const request = new Request('http://example.com/api/init', {
+			method: 'POST',
 			headers: { Origin: 'https://evil.example' }
 		});
 		const ctx = createExecutionContext();
@@ -19,20 +20,28 @@ describe('security hardening', () => {
 	});
 
 	it('allows same-origin API requests and sets CORS headers', async () => {
-		const request = new Request('http://example.com/api/init/wrong-secret', {
-			headers: { Origin: 'http://example.com' }
+		const request = new Request('http://example.com/api/init', {
+			method: 'POST',
+			headers: {
+				Origin: 'http://example.com',
+				'X-Cloud-Mail-Init-Secret': 'wrong-secret'
+			}
 		});
 		const ctx = createExecutionContext();
 		const response = await worker.fetch(request, env, ctx);
 		await waitOnExecutionContext(ctx);
 
-		expect(response.status).toBe(200);
+		expect(response.status).toBe(401);
 		expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://example.com');
 	});
 
 	it('allows configured CORS origins', async () => {
-		const request = new Request('http://example.com/api/init/wrong-secret', {
-			headers: { Origin: 'https://allowed.example' }
+		const request = new Request('http://example.com/api/init', {
+			method: 'POST',
+			headers: {
+				Origin: 'https://allowed.example',
+				'X-Cloud-Mail-Init-Secret': 'wrong-secret'
+			}
 		});
 		const ctx = createExecutionContext();
 		const response = await worker.fetch(request, {
@@ -41,7 +50,7 @@ describe('security hardening', () => {
 		}, ctx);
 		await waitOnExecutionContext(ctx);
 
-		expect(response.status).toBe(200);
+		expect(response.status).toBe(401);
 		expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://allowed.example');
 	});
 

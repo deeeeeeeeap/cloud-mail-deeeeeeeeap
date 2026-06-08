@@ -8,6 +8,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..');
 const generatedDir = join(repoRoot, '.wrangler');
 const generatedConfig = join(generatedDir, 'cloud-mail.generated.wrangler.jsonc');
+const buildScript = join(scriptDir, 'cloudflare-workers-git-build.mjs');
 
 const env = process.env;
 const workerName = env.NAME || 'cloud-mail';
@@ -65,9 +66,6 @@ const config = {
   },
   triggers: {
     crons: ['*/30 * * * *', '0 16 * * *']
-  },
-  build: {
-    command: 'node scripts/cloudflare-workers-git-build.mjs'
   }
 };
 
@@ -101,7 +99,24 @@ mkdirSync(generatedDir, { recursive: true });
 writeFileSync(generatedConfig, `${JSON.stringify(config, null, 2)}\n`);
 
 console.log(`[cloud-mail-deploy] Generated Wrangler config: ${generatedConfig}`);
-console.log('[cloud-mail-deploy] Runtime variables are preserved by keep_vars=true; configure secrets in Cloudflare variables/secrets.');
+console.log('[cloud-mail-deploy] Runtime variables are preserved by keep_vars=true; configure sensitive values as Cloudflare Secrets.');
+
+if (!isTrue(env.CLOUD_MAIL_SKIP_BUILD)) {
+  console.log('[cloud-mail-deploy] Building mail-worker/dist before deploy.');
+  const buildResult = spawnSync(process.execPath, [buildScript], {
+    cwd: repoRoot,
+    stdio: 'inherit'
+  });
+
+  if (buildResult.error) {
+    console.error(`[cloud-mail-deploy] Failed to run build script: ${buildResult.error.message}`);
+    process.exit(1);
+  }
+
+  if (buildResult.status !== 0) {
+    process.exit(buildResult.status || 1);
+  }
+}
 
 const deployArgs = [`wrangler@${wranglerVersion}`, 'deploy', '--config', generatedConfig];
 

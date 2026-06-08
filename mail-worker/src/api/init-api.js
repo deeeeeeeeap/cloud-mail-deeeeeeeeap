@@ -1,6 +1,6 @@
 import app from '../hono/hono';
 import { dbInit } from '../init/init';
 
-app.get('/init/:secret', (c) => {
+app.post('/init', (c) => {
 	return dbInit.init(c);
 })
