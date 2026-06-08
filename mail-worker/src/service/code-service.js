@@ -1,7 +1,5 @@
 import dayjs from 'dayjs';
 import { emailConst, isDel } from '../const/entity-const';
-import { extractCodeByPattern } from './ai-service';
-import emailSearchService from './email-search-service';
 
 export const CODE_STALE_MINUTES = 15;
 
@@ -25,19 +23,27 @@ function likeValue(value) {
 	return `%${String(value || '').trim().toLowerCase()}%`;
 }
 
+function normalizeStale(stale) {
+	return ['fresh', 'stale', 'all'].includes(stale) ? stale : 'fresh';
+}
+
 function mapCodeRow(row) {
 	const createTime = row.createTime || '';
 	const ageMinutes = createTime ? dayjs().diff(dayjs(createTime), 'minute') : null;
 	const normalizedAge = Number.isFinite(ageMinutes) ? Math.max(0, ageMinutes) : null;
+	const isStale = normalizedAge !== null ? normalizedAge >= CODE_STALE_MINUTES : false;
 	return {
 		...row,
-		isStale: normalizedAge !== null ? normalizedAge >= CODE_STALE_MINUTES : false,
+		code: isStale ? '' : row.code,
+		codeHidden: isStale,
+		isStale,
 		ageMinutes: normalizedAge,
 		expiresInMinutes: normalizedAge !== null ? Math.max(0, CODE_STALE_MINUTES - normalizedAge) : null
 	};
 }
 
 function buildConditions(params, options = {}) {
+	const stale = normalizeStale(params.stale);
 	const timeSort = Number(params.timeSort) === 1;
 	const cursorEmailId = normalizeCursor(params.emailId, timeSort);
 	const conditions = [
@@ -82,11 +88,11 @@ function buildConditions(params, options = {}) {
 		binds.push(likeValue(params.subject));
 	}
 
-	if (params.stale === 'fresh') {
+	if (stale === 'fresh') {
 		conditions.push(`datetime(e.create_time) >= datetime('now', '-${CODE_STALE_MINUTES} minutes')`);
 	}
 
-	if (params.stale === 'stale') {
+	if (stale === 'stale') {
 		conditions.push(`datetime(e.create_time) < datetime('now', '-${CODE_STALE_MINUTES} minutes')`);
 	}
 
@@ -97,52 +103,8 @@ function buildConditions(params, options = {}) {
 	};
 }
 
-async function backfillRecentCodes(c, userId) {
-	const conditions = [
-		`e.code = ''`,
-		`e.type = ?`,
-		`e.status != ?`,
-		`e.is_del = ?`,
-		`datetime(e.create_time) >= datetime('now', '-${CODE_STALE_MINUTES} minutes')`
-	];
-	const binds = [emailConst.type.RECEIVE, emailConst.status.SAVING, isDel.NORMAL];
-
-	if (userId !== undefined && userId !== null) {
-		conditions.push(`e.user_id = ?`);
-		binds.push(userId);
-	}
-
-	const result = await c.env.db.prepare(`
-		SELECT
-			e.email_id AS emailId,
-			e.subject AS subject,
-			e.text AS text,
-			e.content AS html
-		FROM email e
-		WHERE ${conditions.join(' AND ')}
-		ORDER BY e.email_id DESC
-		LIMIT 30
-	`).bind(...binds).all();
-
-	const updatedIds = [];
-	for (const row of result.results || []) {
-		const code = extractCodeByPattern(row);
-		if (!code) {
-			continue;
-		}
-		await c.env.db.prepare(`UPDATE email SET code = ? WHERE email_id = ?`).bind(code, row.emailId).run();
-		updatedIds.push(row.emailId);
-	}
-
-	if (updatedIds.length > 0) {
-		await emailSearchService.syncEmailIds(c, updatedIds);
-	}
-}
-
 const codeService = {
-	async list(c, params, userId) {
-		await backfillRecentCodes(c, userId);
-
+	async list(c, params = {}, userId) {
 		const size = normalizePageSize(params.size);
 		const conditions = buildConditions(params, { userId });
 
@@ -171,9 +133,7 @@ const codeService = {
 		};
 	},
 
-	async allList(c, params) {
-		await backfillRecentCodes(c);
-
+	async allList(c, params = {}) {
 		const size = normalizePageSize(params.size);
 		const conditions = buildConditions(params);
 

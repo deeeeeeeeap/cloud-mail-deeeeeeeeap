@@ -66,6 +66,14 @@ const SEARCH_TABLE_SQL_LIST = [
 
 const CODE_MAINTENANCE_BATCH_SIZE = 100;
 
+function normalizeStaleMinutes(value) {
+	const minutes = Number(value);
+	if (!Number.isFinite(minutes) || minutes <= 0) {
+		return CODE_STALE_MINUTES;
+	}
+	return Math.min(Math.floor(minutes), 24 * 60);
+}
+
 function isMissingTable(error, tableName) {
 	return new RegExp(`no such table: ${tableName}`, 'i').test(error?.message || '');
 }
@@ -324,9 +332,15 @@ const maintenanceService = {
 					continue;
 				}
 
-				statements.push(
-					c.env.db.prepare(`UPDATE email SET code = ? WHERE email_id = ?`).bind(nextCode, row.emailId)
-				);
+				if (!currentCode) {
+					statements.push(
+						c.env.db.prepare(`UPDATE email SET code = ? WHERE email_id = ? AND code = ''`).bind(nextCode, row.emailId)
+					);
+				} else {
+					statements.push(
+						c.env.db.prepare(`UPDATE email SET code = ? WHERE email_id = ? AND code = ?`).bind(nextCode, row.emailId, currentCode)
+					);
+				}
 				changedIds.push(row.emailId);
 				updated++;
 
@@ -353,9 +367,35 @@ const maintenanceService = {
 		};
 	},
 
-	async clearStaleCodes(c) {
+	async clearStaleCodes(c, options = {}) {
+		const staleMinutes = normalizeStaleMinutes(options.staleMinutes ?? c.env?.code_stale_minutes);
+		const staleWindow = `-${staleMinutes} minutes`;
+		const dryRun = options.dryRun === true;
 		let cleared = 0;
 		const changedIds = [];
+
+		if (dryRun) {
+			const ids = await c.env.db.prepare(`
+				SELECT email_id AS emailId
+				FROM email
+				WHERE code != ?
+					AND status != ?
+					AND is_del = ?
+					AND datetime(create_time) < datetime('now', ?)
+				ORDER BY email_id ASC
+				LIMIT ?
+			`).bind('', emailConst.status.SAVING, isDel.NORMAL, staleWindow, CODE_MAINTENANCE_BATCH_SIZE).all();
+
+			return {
+				action: 'codes-clear-stale',
+				scanned: (ids.results || []).length,
+				updated: 0,
+				backfilled: 0,
+				cleared: 0,
+				dryRun: true,
+				staleMinutes
+			};
+		}
 
 		while (true) {
 			const ids = await c.env.db.prepare(`
@@ -367,7 +407,7 @@ const maintenanceService = {
 					AND datetime(create_time) < datetime('now', ?)
 				ORDER BY email_id ASC
 				LIMIT ?
-			`).bind('', emailConst.status.SAVING, isDel.NORMAL, `-${CODE_STALE_MINUTES} minutes`, CODE_MAINTENANCE_BATCH_SIZE).all();
+			`).bind('', emailConst.status.SAVING, isDel.NORMAL, staleWindow, CODE_MAINTENANCE_BATCH_SIZE).all();
 
 			const emailIds = (ids.results || []).map(row => row.emailId);
 			if (emailIds.length === 0) {
@@ -375,7 +415,15 @@ const maintenanceService = {
 			}
 
 			const placeholders = emailIds.map(() => '?').join(',');
-			await c.env.db.prepare(`UPDATE email SET code = ? WHERE email_id IN (${placeholders})`).bind('', ...emailIds).run();
+			await c.env.db.prepare(`
+				UPDATE email
+				SET code = ?
+				WHERE email_id IN (${placeholders})
+					AND code != ?
+					AND status != ?
+					AND is_del = ?
+					AND datetime(create_time) < datetime('now', ?)
+			`).bind('', ...emailIds, '', emailConst.status.SAVING, isDel.NORMAL, staleWindow).run();
 			changedIds.push(...emailIds);
 			cleared += emailIds.length;
 		}
@@ -387,7 +435,9 @@ const maintenanceService = {
 			scanned: cleared,
 			updated: cleared,
 			backfilled: 0,
-			cleared
+			cleared,
+			dryRun: false,
+			staleMinutes
 		};
 	}
 };

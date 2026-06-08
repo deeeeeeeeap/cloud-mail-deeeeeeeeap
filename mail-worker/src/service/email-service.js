@@ -1155,7 +1155,14 @@ const emailService = {
 	},
 
 	async updateCode(c, emailId, code) {
-		await orm(c).update(email).set({ code }).where(eq(email.emailId, emailId)).run();
+		const result = await c.env.db.prepare(`
+			UPDATE email
+			SET code = ?
+			WHERE email_id = ? AND code = ''
+		`).bind(code, emailId).run();
+		if (result?.meta && result.meta.changes === 0) {
+			return;
+		}
 		await emailSearchService.syncEmailIds(c, [emailId]);
 	},
 

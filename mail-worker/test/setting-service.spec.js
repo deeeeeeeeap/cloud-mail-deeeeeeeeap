@@ -15,6 +15,18 @@ vi.mock('../src/entity/orm', () => ({
 	}))
 }));
 
+vi.mock('../src/service/verify-record-service', () => ({
+	default: {
+		selectListByIP: vi.fn(async () => [])
+	}
+}));
+
+vi.mock('../src/service/r2-service', () => ({
+	default: {
+		storageType: vi.fn(async () => 'kv')
+	}
+}));
+
 describe('setting service', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -109,4 +121,36 @@ describe('setting service', () => {
 		expect(result.title).toBe('D1 Settings');
 		expect(put).toHaveBeenCalledWith(KvConst.SETTING, expect.stringContaining('"title":"D1 Settings"'));
 	}, 15000);
+
+	it('returns Turnstile configured flags without exposing the secret key', async () => {
+		const { default: settingService } = await import('../src/service/setting-service');
+		const c = {
+			env: {
+				domain: '["589497.xyz"]',
+				kv: {
+					get: vi.fn(async () => null),
+					put: vi.fn(async () => {})
+				}
+			},
+			get: vi.fn(() => null),
+			set: vi.fn()
+		};
+
+		mocks.getSetting.mockResolvedValueOnce({
+			title: 'Cloud Mail',
+			resendTokens: '{}',
+			emailPrefixFilter: '',
+			loginDomain: 0,
+			siteKey: '0x4AAAA_SITE',
+			secretKey: '0x4AAAA_SECRET'
+		});
+
+		const result = await settingService.get(c);
+
+		expect(result.siteKeyConfigured).toBe(true);
+		expect(result.secretKeyConfigured).toBe(true);
+		expect(result.siteKey).toBe('0x4AAA******');
+		expect(result.secretKey).toBeNull();
+		expect(JSON.stringify(result)).not.toContain('0x4AAAA_SECRET');
+	});
 });

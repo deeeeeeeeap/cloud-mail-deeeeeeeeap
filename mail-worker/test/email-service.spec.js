@@ -214,6 +214,18 @@ describe('email service status synchronization', () => {
 		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [1, 2]);
 	});
 
+	it('updates AI-extracted codes only while the code field is still empty', async () => {
+		const recorder = createDbRecorder();
+		const c = { env: { db: recorder.db } };
+
+		await emailService.updateCode(c, 55, 'AB12CD');
+
+		const updateStatement = recorder.statements.find(statement => statement.sql.includes('UPDATE email'));
+		expect(updateStatement.sql).toContain("WHERE email_id = ? AND code = ''");
+		expect(updateStatement.bindings).toEqual(['AB12CD', 55]);
+		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [55]);
+	});
+
 	it('rejects too many outbound attachments before local insert or provider send', async () => {
 		const sendMock = vi.fn();
 		const c = {

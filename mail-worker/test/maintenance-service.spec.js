@@ -199,7 +199,8 @@ describe('maintenance service', () => {
 			backfilled: 0
 		});
 		expect(recorder.batched).toHaveLength(1);
-		expect(recorder.batched[0].bindings).toEqual(['', 1]);
+		expect(recorder.batched[0].sql).toContain('WHERE email_id = ? AND code = ?');
+		expect(recorder.batched[0].bindings).toEqual(['', 1, '20260518']);
 		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [1]);
 	});
 
@@ -229,6 +230,7 @@ describe('maintenance service', () => {
 			backfilled: 1
 		});
 		expect(recorder.batched).toHaveLength(1);
+		expect(recorder.batched[0].sql).toContain("WHERE email_id = ? AND code = ''");
 		expect(recorder.batched[0].bindings).toEqual(['AB12CD', 3]);
 		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [3]);
 	});
@@ -250,8 +252,30 @@ describe('maintenance service', () => {
 			cleared: 2,
 			backfilled: 0
 		});
-		const update = recorder.statements.find(item => item.sql.includes('UPDATE email SET code'));
-		expect(update.bindings).toEqual(['', 7, 8]);
+		const update = recorder.statements.find(item => item.sql.includes('UPDATE email') && item.sql.includes('SET code'));
+		expect(update.sql).toContain('AND code != ?');
+		expect(update.sql).toContain("datetime(create_time) < datetime('now', ?)");
+		expect(update.bindings).toEqual(['', 7, 8, '', 6, 0, '-15 minutes']);
 		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [7, 8]);
+	});
+
+	it('can dry-run expired code clearing without updating rows', async () => {
+		const recorder = createMaintenanceDb([
+			[{ emailId: 9 }, { emailId: 10 }]
+		]);
+		const c = { env: { db: recorder.db, code_stale_minutes: '30' } };
+
+		const result = await maintenanceService.clearStaleCodes(c, { dryRun: true });
+
+		expect(result).toMatchObject({
+			action: 'codes-clear-stale',
+			scanned: 2,
+			updated: 0,
+			cleared: 0,
+			dryRun: true,
+			staleMinutes: 30
+		});
+		expect(recorder.statements.some(item => item.sql.includes('UPDATE email') && item.sql.includes('SET code'))).toBe(false);
+		expect(emailSearchService.syncEmailIds).not.toHaveBeenCalled();
 	});
 });

@@ -33,7 +33,7 @@ function createDbRecorder(resultsList = []) {
 
 describe('code service', () => {
 	it('lists current user verification codes with bound filters and capped page size', async () => {
-		const recorder = createDbRecorder([[], []]);
+		const recorder = createDbRecorder([]);
 		const c = { env: { db: recorder.db } };
 
 		await codeService.list(c, {
@@ -55,7 +55,7 @@ describe('code service', () => {
 	});
 
 	it('lists all verification codes without a user filter and returns user email', async () => {
-		const recorder = createDbRecorder([[], [{ emailId: 1, code: '888888', createTime: new Date().toISOString(), userEmail: 'u@example.com' }]]);
+		const recorder = createDbRecorder([{ emailId: 1, code: '888888', createTime: new Date().toISOString(), userEmail: 'u@example.com' }]);
 		const c = { env: { db: recorder.db } };
 
 		const result = await codeService.allList(c, { stale: 'all', size: 10, emailId: 0, timeSort: 1 });
@@ -71,21 +71,46 @@ describe('code service', () => {
 		expect(result.hasMore).toBe(false);
 	});
 
-	it('backfills recent local codes before listing without calling AI', async () => {
+	it('does not write to email rows from the read list path', async () => {
 		const recorder = createDbRecorder([
-			[{ emailId: 772, subject: 'Your Notion signup code', text: '922951\n', html: '' }],
-			[{ emailId: 772, code: '922951', createTime: new Date().toISOString() }]
+			{ emailId: 772, code: '922951', createTime: new Date().toISOString() }
 		]);
 		const c = { env: { db: recorder.db } };
 		const syncSpy = vi.spyOn(emailSearchService, 'syncEmailIds').mockResolvedValue();
 
 		await codeService.list(c, { stale: 'fresh', size: 10, emailId: 0, timeSort: 0 }, 1);
 
-		const backfillStatement = recorder.statements.find(item => item.sql.includes('e.code ='));
-		expect(backfillStatement.sql).toContain(`datetime(e.create_time) >= datetime('now', '-${CODE_STALE_MINUTES} minutes')`);
 		const updateStatement = recorder.statements.find(item => item.sql.includes('UPDATE email SET code'));
-		expect(updateStatement.bindings).toEqual(['922951', 772]);
-		expect(syncSpy).toHaveBeenCalledWith(c, [772]);
+		expect(updateStatement).toBeUndefined();
+		expect(syncSpy).not.toHaveBeenCalled();
 		syncSpy.mockRestore();
+	});
+
+	it('defaults to fresh codes when stale filter is omitted', async () => {
+		const recorder = createDbRecorder([]);
+		const c = { env: { db: recorder.db } };
+
+		await codeService.list(c, { size: 10, emailId: 0, timeSort: 0 }, 1);
+
+		const statement = recorder.statements.find(item => item.sql.includes('e.code AS code'));
+		expect(statement.sql).toContain("datetime(e.create_time) >= datetime('now', '-15 minutes')");
+	});
+
+	it('hides expired code values in stale or all views', async () => {
+		const oldTime = new Date(Date.now() - (CODE_STALE_MINUTES + 5) * 60 * 1000).toISOString();
+		const recorder = createDbRecorder([
+			{ emailId: 9, code: '123456', createTime: oldTime }
+		]);
+		const c = { env: { db: recorder.db } };
+
+		const result = await codeService.allList(c, { stale: 'all', size: 10, emailId: 0, timeSort: 1 });
+
+		expect(result.list[0]).toMatchObject({
+			emailId: 9,
+			code: '',
+			codeHidden: true,
+			isStale: true,
+			expiresInMinutes: 0
+		});
 	});
 });

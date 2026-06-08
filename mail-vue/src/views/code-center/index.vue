@@ -4,7 +4,7 @@
       <div class="search">
         <el-input v-model="params.query" class="search-input" :placeholder="$t('searchCodeDesc')" @keyup.enter="search"/>
       </div>
-      <el-select v-model="params.stale" class="status-select">
+      <el-select v-model="params.stale" class="status-select" @change="refresh">
         <el-option :label="$t('freshCode')" value="fresh"/>
         <el-option :label="$t('all')" value="all"/>
         <el-option :label="$t('staleCode')" value="stale"/>
@@ -41,7 +41,7 @@
           <div class="code-info">
             <div class="info-left">
               <div class="info-left-item">
-                <span class="code" @click.stop="copyCode(item)">{{ item.code }}</span>
+                <span class="code" :class="{hidden: item.isStale || !item.code}" @click.stop="copyCode(item)">{{ displayCode(item) }}</span>
                 <el-tag v-if="item.isStale" type="info">{{ $t('staleCode') }}</el-tag>
                 <el-tag v-else type="success">{{ $t('freshCode') }}</el-tag>
                 <el-tag v-if="copiedEmailId === item.emailId" type="primary">{{ $t('copied') }}</el-tag>
@@ -96,6 +96,7 @@ const first = ref(true)
 const hasMore = ref(false)
 const copiedEmailId = ref(0)
 let copyTimer = 0
+let requestSeq = 0
 const params = reactive({
   query: '',
   stale: 'fresh',
@@ -111,8 +112,8 @@ watch(canViewAll, value => {
   }
 })
 
-function requestList(requestParams) {
-  return scope.value === 'all' ? codeAllList(requestParams) : codeList(requestParams)
+function requestList(requestScope, requestParams) {
+  return requestScope === 'all' ? codeAllList(requestParams) : codeList(requestParams)
 }
 
 function search() {
@@ -120,27 +121,33 @@ function search() {
 }
 
 function refresh() {
-  params.emailId = 0
   hasMore.value = false
   getList(true)
 }
 
 function loadMore() {
   if (!hasMore.value || loading.value || loadingMore.value || codes.length === 0) return
-  params.emailId = codes.at(-1).emailId
   getList(false)
 }
 
 function getList(refreshList = false) {
-  if (loading.value) return
+  if (!refreshList && (loading.value || loadingMore.value)) return
+  const requestId = ++requestSeq
+  const requestScope = scope.value
+  const requestParams = {
+    ...params,
+    emailId: refreshList ? 0 : codes.at(-1)?.emailId || 0
+  }
   loading.value = refreshList
   loadingMore.value = !refreshList
-  requestList({...params}).then(data => {
+  requestList(requestScope, requestParams).then(data => {
+    if (requestId !== requestSeq || requestScope !== scope.value) return
     if (refreshList) codes.length = 0
-    codes.push(...data.list)
-    hasMore.value = data.hasMore
+    codes.push(...(data.list || []))
+    hasMore.value = !!data.hasMore
     first.value = false
   }).finally(() => {
+    if (requestId !== requestSeq) return
     loading.value = false
     loadingMore.value = false
   })
@@ -168,7 +175,7 @@ async function writeClipboard(text) {
 
 async function copyCode(item) {
   const code = typeof item === 'string' ? item : item?.code
-  if (!code) return
+  if (!code || item?.isStale) return
 
   try {
     await writeClipboard(code)
@@ -213,7 +220,15 @@ function codeStatusText(item) {
   return t('freshCode')
 }
 
+function displayCode(item) {
+  if (item.isStale || !item.code) {
+    return t('codeExpiredHidden')
+  }
+  return item.code
+}
+
 onBeforeUnmount(() => {
+  requestSeq++
   if (copyTimer) clearTimeout(copyTimer)
 })
 
@@ -338,6 +353,11 @@ getList(true)
       overflow: hidden;
       text-overflow: ellipsis;
       cursor: pointer;
+
+      &.hidden {
+        color: var(--el-text-color-secondary);
+        cursor: default;
+      }
     }
 
     .label {

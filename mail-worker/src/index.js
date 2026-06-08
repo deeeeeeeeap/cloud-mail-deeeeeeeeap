@@ -7,6 +7,7 @@ import oauthService from "./service/oauth-service";
 import analysisService from './service/analysis-service';
 import attService from './service/att-service';
 import r2Service from './service/r2-service';
+import maintenanceService from './service/maintenance-service';
 
 async function objectResponse(c, key) {
 	const obj = await r2Service.getObj(c, key);
@@ -19,6 +20,10 @@ async function runScheduledTask(name, task) {
 	} catch (e) {
 		console.error(`Scheduled task ${name} failed:`, e?.message || e);
 	}
+}
+
+function isEnabled(value) {
+	return value === true || value === 1 || value === 'true' || value === '1';
 }
 
 export default {
@@ -57,6 +62,11 @@ export default {
 		await runScheduledTask('reset-day-send-count', () => userService.resetDaySendCount({ env }))
 		await runScheduledTask('complete-receive-all', () => emailService.completeReceiveAll({ env }))
 		await runScheduledTask('clear-unbound-oauth-users', () => oauthService.clearNoBindOathUser({ env }))
+		if (isEnabled(env.code_clear_stale_cron)) {
+			await runScheduledTask('codes-clear-stale', () => maintenanceService.clearStaleCodes({ env }, {
+				staleMinutes: env.code_stale_minutes
+			}))
+		}
 		await runScheduledTask('analysis-cache', () => analysisService.refreshEchartsCache({ env }))
 	},
 };

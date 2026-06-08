@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
 	resetDaySendCount: vi.fn(),
 	completeReceiveAll: vi.fn(),
 	clearNoBindOathUser: vi.fn(),
-	refreshEchartsCache: vi.fn()
+	refreshEchartsCache: vi.fn(),
+	clearStaleCodes: vi.fn()
 }));
 
 vi.mock('../src/service/verify-record-service', () => ({
@@ -28,6 +29,10 @@ vi.mock('../src/service/analysis-service', () => ({
 	default: { refreshEchartsCache: mocks.refreshEchartsCache }
 }));
 
+vi.mock('../src/service/maintenance-service', () => ({
+	default: { clearStaleCodes: mocks.clearStaleCodes }
+}));
+
 const { default: worker } = await import('../src/index');
 
 describe('scheduled handler', () => {
@@ -43,6 +48,7 @@ describe('scheduled handler', () => {
 		expect(mocks.resetDaySendCount).not.toHaveBeenCalled();
 		expect(mocks.completeReceiveAll).not.toHaveBeenCalled();
 		expect(mocks.clearNoBindOathUser).not.toHaveBeenCalled();
+		expect(mocks.clearStaleCodes).not.toHaveBeenCalled();
 	});
 
 	it('continues daily maintenance tasks after one task fails', async () => {
@@ -55,5 +61,22 @@ describe('scheduled handler', () => {
 		expect(mocks.completeReceiveAll).toHaveBeenCalledTimes(1);
 		expect(mocks.clearNoBindOathUser).toHaveBeenCalledTimes(1);
 		expect(mocks.refreshEchartsCache).toHaveBeenCalledTimes(1);
+		expect(mocks.clearStaleCodes).not.toHaveBeenCalled();
+	});
+
+	it('runs expired code cleanup only when explicitly enabled', async () => {
+		await worker.scheduled({ cron: '0 0 * * *' }, {
+			code_clear_stale_cron: 'true',
+			code_stale_minutes: '30'
+		}, {});
+
+		expect(mocks.clearStaleCodes).toHaveBeenCalledWith({
+			env: {
+				code_clear_stale_cron: 'true',
+				code_stale_minutes: '30'
+			}
+		}, {
+			staleMinutes: '30'
+		});
 	});
 });

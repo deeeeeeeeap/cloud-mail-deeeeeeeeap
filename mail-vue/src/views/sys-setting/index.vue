@@ -323,18 +323,24 @@
               <div class="setting-item">
                 <div><span>Site Key</span></div>
                 <div class="bot-verify">
-                  <span>{{ setting.siteKey }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="turnstileShow = true">
+                  <span>{{ turnstileConfiguredText('siteKey') }}</span>
+                  <el-button class="opt-button" size="small" type="primary" @click="openTurnstileDialog">
                     <Icon icon="lsicon:edit-outline" width="16" height="16"/>
+                  </el-button>
+                  <el-button class="opt-button" size="small" type="danger" :disabled="!turnstileHasKey('siteKey')" @click="clearTurnstileKey('siteKey')">
+                    <Icon icon="material-symbols:delete-outline" width="16" height="16"/>
                   </el-button>
                 </div>
               </div>
               <div class="setting-item">
                 <div><span>Secret Key</span></div>
                 <div class="bot-verify">
-                  <span> {{ setting.secretKey }} </span>
-                  <el-button class="opt-button" size="small" type="primary" @click="turnstileShow = true">
+                  <span>{{ turnstileConfiguredText('secretKey') }}</span>
+                  <el-button class="opt-button" size="small" type="primary" @click="openTurnstileDialog">
                     <Icon icon="lsicon:edit-outline" width="16" height="16"/>
+                  </el-button>
+                  <el-button class="opt-button" size="small" type="danger" :disabled="!turnstileHasKey('secretKey')" @click="clearTurnstileKey('secretKey')">
+                    <Icon icon="material-symbols:delete-outline" width="16" height="16"/>
                   </el-button>
                 </div>
               </div>
@@ -470,8 +476,9 @@
       <el-dialog v-model="turnstileShow" :title="$t('addTurnstileSecret')" width="340"
                  @closed="turnstileForm.secretKey = '';turnstileForm.siteKey = ''">
         <form>
-          <el-input type="text" placeholder="Site Key" v-model="turnstileForm.siteKey"/>
-          <el-input type="text" style="margin-top: 15px" placeholder="Secret Key" v-model="turnstileForm.secretKey"/>
+          <div class="dialog-tip">{{ $t('turnstileBlankUnchanged') }}</div>
+          <el-input type="text" :placeholder="`Site Key - ${$t('turnstileBlankUnchanged')}`" v-model="turnstileForm.siteKey"/>
+          <el-input type="text" style="margin-top: 15px" :placeholder="`Secret Key - ${$t('turnstileBlankUnchanged')}`" v-model="turnstileForm.secretKey"/>
           <el-button type="primary" :loading="settingLoading" @click="saveTurnstileKey">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
@@ -1332,11 +1339,51 @@ function delBackground() {
   })
 }
 
+function openTurnstileDialog() {
+  turnstileForm.siteKey = ''
+  turnstileForm.secretKey = ''
+  turnstileShow.value = true
+}
+
+function turnstileHasKey(key) {
+  const configuredKey = `${key}Configured`
+  if (Object.prototype.hasOwnProperty.call(setting.value, configuredKey)) {
+    return !!setting.value[configuredKey]
+  }
+  return !!setting.value[key]
+}
+
+function turnstileConfiguredText(key) {
+  return turnstileHasKey(key) ? t('configured') : t('notConfigured')
+}
+
 function saveTurnstileKey() {
   const settingForm = {}
-  settingForm.siteKey = turnstileForm.siteKey
-  settingForm.secretKey = turnstileForm.secretKey
+  const siteKey = turnstileForm.siteKey.trim()
+  const secretKey = turnstileForm.secretKey.trim()
+  if (siteKey) settingForm.siteKey = siteKey
+  if (secretKey) settingForm.secretKey = secretKey
+  if (Object.keys(settingForm).length === 0) {
+    ElMessage({
+      message: t('noChanges'),
+      type: 'info',
+      plain: true
+    })
+    turnstileShow.value = false
+    return
+  }
   editSetting(settingForm)
+}
+
+function clearTurnstileKey(key) {
+  const label = key === 'siteKey' ? 'Site Key' : 'Secret Key'
+  ElMessageBox.confirm(t('clearTurnstileKeyConfirm', {key: label}), {
+    confirmButtonText: t('confirm'),
+    cancelButtonText: t('cancel'),
+    type: 'warning'
+  }).then(() => {
+    editSetting({[key]: ''})
+  })
 }
 
 async function saveBackground() {
@@ -1904,6 +1951,13 @@ function editSetting(settingForm, refreshStatus = true) {
 
 .dialog-input {
   margin-bottom: 15px;
+}
+
+.dialog-tip {
+  margin-bottom: 12px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .force-path-style {
