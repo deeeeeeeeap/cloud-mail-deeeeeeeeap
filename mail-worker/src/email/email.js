@@ -163,9 +163,15 @@ export async function email(message, env, ctx) {
 
 		}
 
-		//转发到TG
+		//转发到TG，走后台不阻塞收信主链
 		if (tgBotStatus === settingConst.tgBotStatus.OPEN && tgChatId) {
-			await telegramService.sendEmailToBot({ env }, emailRow)
+			const pushTask = telegramService.sendEmailToBot({ env }, emailRow)
+				.catch(e => console.error('TG push failed:', e?.message || e));
+			if (ctx?.waitUntil) {
+				ctx.waitUntil(pushTask);
+			} else {
+				await pushTask;
+			}
 		}
 
 		//转发到其他邮箱

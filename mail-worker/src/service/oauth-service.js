@@ -5,6 +5,7 @@ import { eq, inArray } from 'drizzle-orm';
 import userService from "./user-service";
 import loginService from "./login-service";
 import cryptoUtils from "../utils/crypto-utils";
+import { chunkArray } from '../utils/sql-utils';
 
 const oauthService = {
 
@@ -106,7 +107,9 @@ const oauthService = {
 	},
 
 	async deleteByUserIds(c, userIds) {
-		await orm(c).delete(oauth).where(inArray(oauth.userId, userIds)).run();
+		for (const chunk of chunkArray(userIds)) {
+			await orm(c).delete(oauth).where(inArray(oauth.userId, chunk)).run();
+		}
 	},
 
 	//定时任务凌晨清除未绑定邮箱的oauth用户

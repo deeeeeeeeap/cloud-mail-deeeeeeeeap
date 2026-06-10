@@ -31,7 +31,7 @@ import emailScroll from "@/components/email-scroll/index.vue"
 import {emailList, emailDelete, emailDetail, emailLatest, emailRead} from "@/request/email.js";
 import {starAdd, starCancel} from "@/request/star.js";
 import {defineOptions, h, onMounted, reactive, ref, watch} from "vue";
-import {sleep} from "@/utils/time-utils.js";
+import {sleep, waitUntilVisible} from "@/utils/time-utils.js";
 import router from "@/router/index.js";
 import {Icon} from "@iconify/vue";
 import { useRoute } from 'vue-router'
@@ -80,6 +80,9 @@ async function latest() {
 
     let autoRefresh = settingStore.settings.autoRefresh;
     await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 3000);
+
+    //页面在后台时暂停轮询
+    await waitUntilVisible();
 
     if (route.name !== 'email') {
       continue;
@@ -139,10 +142,10 @@ function cancelStar(email) {
   emailStore.starScroll?.deleteEmail([email.emailId])
 }
 
-function getEmailList(emailId, size) {
+function getEmailList(emailId, size, withTotal = 1) {
   const accountId =  accountStore.currentAccountId;
   const allReceive = accountStore.currentAccount.allReceive;
-  return emailList(accountId, allReceive, emailId, params.timeSort, size, 0).then(data => {
+  return emailList(accountId, allReceive, emailId, params.timeSort, size, 0, withTotal).then(data => {
     data.latestEmail.reqAccountId = accountId;
     data.latestEmail.allReceive = allReceive;
     return data;

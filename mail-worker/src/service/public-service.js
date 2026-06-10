@@ -14,6 +14,7 @@ import { isDel, roleConst } from '../const/entity-const';
 import email from '../entity/email';
 import userService from './user-service';
 import KvConst from '../const/kv-const';
+import { truncateByBytes, LIKE_PATTERN_MAX_BYTES } from '../utils/sql-utils';
 
 const PUBLIC_PREVIEW_TEXT_LENGTH = 240;
 
@@ -88,24 +89,25 @@ const publicService = {
 
 		let conditions = []
 
+		//公共接口的 LIKE 模式由调用方拼接，按 D1 50 字节硬限截断防止报错
 		if (toEmail) {
-			conditions.push(sql`${email.toEmail} COLLATE NOCASE LIKE ${toEmail}`)
+			conditions.push(sql`${email.toEmail} COLLATE NOCASE LIKE ${truncateByBytes(toEmail, LIKE_PATTERN_MAX_BYTES)}`)
 		}
 
 		if (sendEmail) {
-			conditions.push(sql`${email.sendEmail} COLLATE NOCASE LIKE ${sendEmail}`)
+			conditions.push(sql`${email.sendEmail} COLLATE NOCASE LIKE ${truncateByBytes(sendEmail, LIKE_PATTERN_MAX_BYTES)}`)
 		}
 
 		if (sendName) {
-			conditions.push(sql`${email.name} COLLATE NOCASE LIKE ${sendName}`)
+			conditions.push(sql`${email.name} COLLATE NOCASE LIKE ${truncateByBytes(sendName, LIKE_PATTERN_MAX_BYTES)}`)
 		}
 
 		if (subject) {
-			conditions.push(sql`${email.subject} COLLATE NOCASE LIKE ${subject}`)
+			conditions.push(sql`${email.subject} COLLATE NOCASE LIKE ${truncateByBytes(subject, LIKE_PATTERN_MAX_BYTES)}`)
 		}
 
 		if (content) {
-			conditions.push(sql`${email.content} COLLATE NOCASE LIKE ${content}`)
+			conditions.push(sql`${email.content} COLLATE NOCASE LIKE ${truncateByBytes(content, LIKE_PATTERN_MAX_BYTES)}`)
 		}
 
 		if (type || type === 0) {

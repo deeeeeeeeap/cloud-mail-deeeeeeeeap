@@ -3,6 +3,13 @@
 	"version": "0.0.0",
 	"private": true,
 	"packageManager": "pnpm@10.11.1",
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"esbuild",
+			"sharp",
+			"workerd"
+		]
+	},
 	"scripts": {
 		"dev": "wrangler dev --config wrangler-dev.toml",
 		"test": "vitest run",

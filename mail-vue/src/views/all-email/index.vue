@@ -105,7 +105,7 @@ import {Icon} from "@iconify/vue";
 import router from "@/router/index.js";
 import {useI18n} from 'vue-i18n';
 import {toUtc} from "@/utils/day.js";
-import {sleep} from "@/utils/time-utils.js";
+import {sleep, waitUntilVisible} from "@/utils/time-utils.js";
 import {useSettingStore} from "@/store/setting.js";
 import { useRoute } from 'vue-router'
 
@@ -299,8 +299,8 @@ function jumpContent(email) {
 }
 
 
-function getEmailList(emailId, size) {
-  return allEmailList({emailId, size, ...params})
+function getEmailList(emailId, size, withTotal = 1) {
+  return allEmailList({emailId, size, withTotal, ...params})
 }
 
 async function latest() {
@@ -310,6 +310,9 @@ async function latest() {
     let autoRefresh = settingStore.settings.autoRefresh;
 
     await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 3000);
+
+    //页面在后台时暂停轮询
+    await waitUntilVisible();
 
     const latestId = sysEmailScroll.value.latestEmail?.emailId
 

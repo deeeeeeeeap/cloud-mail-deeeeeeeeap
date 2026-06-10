@@ -42,6 +42,7 @@
                  :data-checked="item.checked"
                  @click="jumpDetails(item)"
                  @mouseenter="preloadEmailDetail(item)"
+                 @mouseleave="cancelPreloadEmailDetail"
                  @focusin="preloadEmailDetail(item)"
                  v-if="!item.expand"
                  :key="item.emailId"
@@ -392,6 +393,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearInterval(timer)
+  clearTimeout(preloadTimer)
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('wheel', handleWheel)
 })
@@ -539,12 +541,22 @@ function trimDetailCache() {
   }
 }
 
+let preloadTimer = null;
+
+//hover 节流：停留 150ms 才预取详情，快速滑过列表不再触发批量请求
 function preloadEmailDetail(email) {
   if (!props.getEmailDetail || !email?.emailId || email.content || detailCache.has(email.emailId)) {
     return;
   }
 
-  getCachedEmailDetail(email.emailId).catch(() => {});
+  clearTimeout(preloadTimer);
+  preloadTimer = setTimeout(() => {
+    getCachedEmailDetail(email.emailId).catch(() => {});
+  }, 150);
+}
+
+function cancelPreloadEmailDetail() {
+  clearTimeout(preloadTimer);
 }
 
 function visibleChange(e) {
@@ -769,13 +781,18 @@ function handleDelete() {
 
 function deleteEmail(emailIds) {
   emailIds.forEach(emailId => detailCache.delete(emailId));
+  let removed = 0;
   emailIds.forEach(emailId => {
     emailList.forEach((item, index) => {
       if (emailId === item.emailId) {
         emailList.splice(index, 1);
+        removed++;
       }
     })
   })
+  if (removed > 0 && total.value) {
+    total.value = Math.max(0, total.value - removed);
+  }
   if (emailList.length < queryParam.size && !noLoading.value) {
     getEmailList()
   }
@@ -896,7 +913,9 @@ function getEmailList(refresh = false) {
   }
 
   const requestVersion = listVersion;
-  const dataPromise = usePrefetch ? Promise.resolve(prefetchedPage.data) : props.getEmailList(emailId, queryParam.size);
+  // 仅首屏/刷新(无游标)取 COUNT，翻页 withTotal=0 跳过总数统计
+  const withTotal = emailId === 0 ? 1 : 0;
+  const dataPromise = usePrefetch ? Promise.resolve(prefetchedPage.data) : props.getEmailList(emailId, queryParam.size, withTotal);
   if (usePrefetch) {
     prefetchedPage = null;
   }
@@ -927,7 +946,9 @@ function getEmailList(refresh = false) {
     noLoading.value = data.hasMore === false || data.list.length < queryParam.size;
     followLoading.value = !noLoading.value;
 
-    total.value = data.total;
+    if (withTotal) {
+      total.value = data.total;
+    }
     prefetchNextPage(listVersion);
   }).finally(() => {
     loading.value = false
@@ -952,7 +973,7 @@ function prefetchNextPage(version) {
   }
 
   prefetchingPage = key;
-  props.getEmailList(nextEmailId, queryParam.size)
+  props.getEmailList(nextEmailId, queryParam.size, 0)
       .then(data => {
         if (version === listVersion) {
           prefetchedPage = { key, data };

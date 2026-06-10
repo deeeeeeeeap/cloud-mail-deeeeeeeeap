@@ -23,6 +23,7 @@ import account from "../entity/account";
 import { att } from '../entity/att';
 import telegramService from './telegram-service';
 import emailSearchService from './email-search-service';
+import { chunkArray, truncateLikeTerm, utf8ByteLength, LIKE_PATTERN_MAX_BYTES } from '../utils/sql-utils';
 
 const emailListSelect = {
 	emailId: email.emailId,
@@ -76,6 +77,27 @@ function previewText(row) {
 		.replace(/[\u200B-\u200F\uFEFF\u034F\u00A0\u3000\u00AD]/g, '')
 		.replace(/\s+/g, ' ')
 		.trim();
+}
+
+// 通过 waitUntil 把非关键任务移出请求主链；无执行上下文时(如测试、scheduled)回退为直接执行
+function runInBackground(c, task) {
+	const promise = Promise.resolve()
+		.then(task)
+		.catch(e => console.error('Background task failed:', e?.message || e));
+
+	let ctx;
+	try {
+		ctx = c.executionCtx;
+	} catch (e) {
+		ctx = undefined;
+	}
+
+	if (ctx?.waitUntil) {
+		ctx.waitUntil(promise);
+		return;
+	}
+
+	return promise;
 }
 
 const emailService = {
@@ -198,11 +220,13 @@ const emailService = {
 	async delete(c, params, userId) {
 		const { emailIds } = params;
 		const emailIdList = emailIds.split(',').map(Number);
-		await orm(c).update(email).set({ isDel: isDel.DELETE }).where(
-			and(
-				eq(email.userId, userId),
-				inArray(email.emailId, emailIdList)))
-			.run();
+		for (const chunk of chunkArray(emailIdList)) {
+			await orm(c).update(email).set({ isDel: isDel.DELETE }).where(
+				and(
+					eq(email.userId, userId),
+					inArray(email.emailId, chunk)))
+				.run();
+		}
 		await emailSearchService.syncEmailIds(c, emailIdList);
 	},
 
@@ -409,7 +433,7 @@ const emailService = {
 			await this.HandleOnSiteEmail(c, receiveEmail, emailResult, attList);
 		}
 
-		await this.recordSendMetrics(c, { roleRow, receiveEmail, userId });
+		runInBackground(c, () => this.recordSendMetrics(c, { roleRow, receiveEmail, userId }));
 
 		return [ emailResult ];
 	},
@@ -651,10 +675,13 @@ const emailService = {
 	//处理站内邮件发送
 	async HandleOnSiteEmail(c, receiveEmail, sendEmailData, attList) {
 
-		const { noRecipient  } = await settingService.query(c);
+		const { noRecipient, tgBotStatus, tgChatId, ruleType, ruleEmail } = await settingService.query(c);
 
 		//查询所有收件人账号信息
-		let accountList = await orm(c).select().from(account).where(inArray(account.email, receiveEmail)).all();
+		const accountList = [];
+		for (const chunk of chunkArray(receiveEmail)) {
+			accountList.push(...await orm(c).select().from(account).where(inArray(account.email, chunk)).all());
+		}
 
 		//查询所有收件人权限身份
 		const userIds = accountList.map(accountRow => accountRow.userId);
@@ -723,24 +750,50 @@ const emailService = {
 
 		}
 
-		//保存邮件
+		//保存邮件：批量 INSERT 一次往返，替代逐收件人逐附件串行写入
 		const receiveEmailList = emailDataList.filter(emailRow => emailRow.status === emailConst.status.RECEIVE || emailRow.status === emailConst.status.NOONE);
 
-		for (const emailData of receiveEmailList) {
+		const insertedEmailRows = [];
 
-			const emailRow = await orm(c).insert(email).values(emailData).returning().get();
-			await emailSearchService.syncEmailIds(c, [emailRow.emailId]);
+		if (receiveEmailList.length > 0) {
 
-			//设置附件保存
-			for (const attRow of attList) {
-				const attValues = {...attRow};
-				attValues.emailId = emailRow.emailId;
-				attValues.accountId = emailRow.accountId;
-				attValues.userId = emailRow.userId;
-				attValues.attId = null;
-				await orm(c).insert(att).values(attValues).run();
+			const db = orm(c);
+			const insertResults = await db.batch(receiveEmailList.map(emailData => db.insert(email).values(emailData).returning()));
+
+			for (const rows of insertResults) {
+				const emailRow = Array.isArray(rows) ? rows[0] : rows;
+				if (emailRow) {
+					insertedEmailRows.push(emailRow);
+				}
 			}
 
+			//附件批量保存
+			if (attList.length > 0 && insertedEmailRows.length > 0) {
+				const attValuesList = [];
+				for (const emailRow of insertedEmailRows) {
+					for (const attRow of attList) {
+						attValuesList.push({
+							...attRow,
+							emailId: emailRow.emailId,
+							accountId: emailRow.accountId,
+							userId: emailRow.userId,
+							attId: null
+						});
+					}
+				}
+				await db.batch(attValuesList.map(attValues => db.insert(att).values(attValues)));
+			}
+
+			await emailSearchService.syncEmailIds(c, insertedEmailRows.map(row => row.emailId));
+		}
+
+		//站内收信同样触发TG推送，走后台不阻塞发信主链
+		if (tgBotStatus === settingConst.tgBotStatus.OPEN && tgChatId && insertedEmailRows.length > 0) {
+			const ruleEmails = ruleType === settingConst.ruleType.RULE ? (ruleEmail || '').split(',') : null;
+			const pushRows = insertedEmailRows.filter(emailRow => !ruleEmails || ruleEmails.includes(emailRow.toEmail));
+			if (pushRows.length > 0) {
+				runInBackground(c, () => Promise.all(pushRows.map(emailRow => telegramService.sendEmailToBot(c, emailRow))));
+			}
 		}
 
 		const bouncedEmail = emailDataList.find(emailRow => emailRow.status === emailConst.status.BOUNCED);
@@ -766,6 +819,15 @@ const emailService = {
 			return ''
 		}
 
+		const ossDomain = domainUtils.toOssDomain(r2domain);
+		const hasCid = !!(cidAttList && cidAttList.length) && content.includes('cid:');
+		const hasOssUrl = !!ossDomain && content.includes(ossDomain + '/');
+
+		//正文里没有可替换目标时直接返回，跳过 linkedom 解析
+		if (!hasCid && !hasOssUrl) {
+			return content;
+		}
+
 		const { document } = parseHTML(content);
 
 		const images = Array.from(document.querySelectorAll('img'));
@@ -775,7 +837,7 @@ const emailService = {
 		for (const img of images) {
 
 			const src = img.getAttribute('src');
-			if (src && src.startsWith('cid:') && cidAttList) {
+			if (hasCid && src && src.startsWith('cid:')) {
 
 				const cid = src.replace(/^cid:/, '');
 				const attCidIndex = cidAttList.findIndex(cidAtt => cidAtt.contentId.replace(/^<|>$/g, '') === cid);
@@ -788,10 +850,8 @@ const emailService = {
 
 			}
 
-			r2domain = domainUtils.toOssDomain(r2domain)
-
-			if (src && src.startsWith(r2domain + '/')) {
-				img.setAttribute('src', src.replace(r2domain + '/', '{{domain}}'));
+			if (hasOssUrl && src && src.startsWith(ossDomain + '/')) {
+				img.setAttribute('src', src.replace(ossDomain + '/', '{{domain}}'));
 			}
 
 		}
@@ -880,14 +940,18 @@ const emailService = {
 		await attService.removeByEmailIds(c, emailIds);
 		await starService.removeByEmailIds(c, emailIds);
 		await emailSearchService.removeEmailIds(c, emailIds);
-		await orm(c).delete(email).where(inArray(email.emailId, emailIds)).run();
+		for (const chunk of chunkArray(emailIds)) {
+			await orm(c).delete(email).where(inArray(email.emailId, chunk)).run();
+		}
 	},
 
 	async physicsDeleteUserIds(c, userIds) {
 		await attService.removeByUserIds(c, userIds);
-		const emailIds = await orm(c).select({ emailId: email.emailId }).from(email).where(inArray(email.userId, userIds)).all();
-		await emailSearchService.removeEmailIds(c, emailIds.map(row => row.emailId));
-		await orm(c).delete(email).where(inArray(email.userId, userIds)).run();
+		for (const chunk of chunkArray(userIds)) {
+			const emailIds = await orm(c).select({ emailId: email.emailId }).from(email).where(inArray(email.userId, chunk)).all();
+			await emailSearchService.removeEmailIds(c, emailIds.map(row => row.emailId));
+			await orm(c).delete(email).where(inArray(email.userId, chunk)).run();
+		}
 	},
 
 	async updateEmailStatus(c, params) {
@@ -982,28 +1046,29 @@ const emailService = {
 		}
 
 		if (userEmail) {
-			conditions.push(sql`${user.email} COLLATE NOCASE LIKE ${'%'+ userEmail + '%'}`);
+			conditions.push(sql`${user.email} COLLATE NOCASE LIKE ${'%'+ truncateLikeTerm(userEmail) + '%'}`);
 		}
 
 		if (accountEmail) {
+			const accountEmailTerm = truncateLikeTerm(accountEmail);
 			conditions.push(
 				or(
-					sql`${email.toEmail} COLLATE NOCASE LIKE ${'%'+ accountEmail + '%'}`,
-					sql`${email.sendEmail} COLLATE NOCASE LIKE ${'%'+ accountEmail + '%'}`,
+					sql`${email.toEmail} COLLATE NOCASE LIKE ${'%'+ accountEmailTerm + '%'}`,
+					sql`${email.sendEmail} COLLATE NOCASE LIKE ${'%'+ accountEmailTerm + '%'}`,
 				)
 			)
 		}
 
 		if (name) {
-			conditions.push(sql`${email.name} COLLATE NOCASE LIKE ${'%'+ name + '%'}`);
+			conditions.push(sql`${email.name} COLLATE NOCASE LIKE ${'%'+ truncateLikeTerm(name) + '%'}`);
 		}
 
 		if (subject) {
-			conditions.push(sql`${email.subject} COLLATE NOCASE LIKE ${'%'+ subject + '%'}`);
+			conditions.push(sql`${email.subject} COLLATE NOCASE LIKE ${'%'+ truncateLikeTerm(subject) + '%'}`);
 		}
 
 		if (searchText) {
-			conditions.push(sql`${email.text} COLLATE NOCASE LIKE ${'%'+ searchText + '%'}`);
+			conditions.push(sql`${email.text} COLLATE NOCASE LIKE ${'%'+ truncateLikeTerm(searchText) + '%'}`);
 		}
 
 		conditions.push(ne(email.status, emailConst.status.SAVING));
@@ -1172,6 +1237,14 @@ const emailService = {
 		let right = type === 'left' || type === 'include'
 		let left = type === 'include'
 
+		//删除条件截断会扩大匹配范围，超出 D1 LIKE 50 字节硬限直接报错
+		const wildcardBytes = (left ? 1 : 0) + (right ? 1 : 0);
+		for (const term of [sendName, sendEmail, toEmail, subject]) {
+			if (term && utf8ByteLength(term) + wildcardBytes > LIKE_PATTERN_MAX_BYTES) {
+				throw new BizError(t('searchTermTooLong'), 400);
+			}
+		}
+
 		const conditions = []
 
 		if (sendName) {
@@ -1222,7 +1295,9 @@ const emailService = {
 
 	async read(c, params, userId) {
 		const { emailIds } = params;
-		await orm(c).update(email).set({ unread: emailConst.unread.READ }).where(and(eq(email.userId, userId), inArray(email.emailId, emailIds)));
+		for (const chunk of chunkArray(emailIds)) {
+			await orm(c).update(email).set({ unread: emailConst.unread.READ }).where(and(eq(email.userId, userId), inArray(email.emailId, chunk)));
+		}
 	}
 };
 

@@ -1,5 +1,17 @@
 import { emailConst } from '../const/entity-const';
 
+// SQLite 日期修饰符要求数字自带符号，例如 '+5.5 hours' / '-8 hours'
+function offsetModifier(diffHours) {
+	const hours = Number(diffHours) || 0;
+	return `${hours >= 0 ? '+' : ''}${hours} hours`;
+}
+
+function dayRangeBinds(diffHours) {
+	const offset = offsetModifier(diffHours);
+	const inverse = offsetModifier(-(Number(diffHours) || 0));
+	return { offset, inverse };
+}
+
 const analysisDao = {
 	async numberCount(c) {
 		const { results } = await c.env.db.prepare(`
@@ -48,56 +60,51 @@ const analysisDao = {
 		return results[0];
 	},
 
+	//谓词使用裸列范围(create_time >= ? AND create_time < ?)以命中索引，DATE() 仅用于分组
 	async userDayCount(c, diffHours) {
+		const { offset, inverse } = dayRangeBinds(diffHours);
 		const { results } = await c.env.db.prepare(`
             SELECT
-                DATE(create_time,'+${diffHours} hours') AS date,
+                DATE(create_time, ?1) AS date,
                 COUNT(*) AS total
             FROM
                 user
             WHERE
-                DATE(create_time,'+${diffHours} hours') BETWEEN DATE('now', '-15 days', '+${diffHours} hours') AND DATE('now','-1 day','+${diffHours} hours')
+                create_time >= DATETIME(DATE('now', '-15 days', ?1), ?2)
+                AND create_time < DATETIME(DATE('now', ?1), ?2)
             GROUP BY
-                DATE(create_time,'+${diffHours} hours')
+                DATE(create_time, ?1)
             ORDER BY
                 date ASC
-        `).all();
+        `).bind(offset, inverse).all();
 		return results;
 	},
 
 	async receiveDayCount(c, diffHours) {
-		const { results } = await c.env.db.prepare(`
-            SELECT
-                DATE(create_time,'+${diffHours} hours') AS date,
-                COUNT(*) AS total
-            FROM
-                email
-            WHERE
-			  				DATE(create_time,'+${diffHours} hours') BETWEEN DATE('now', '-15 days', '+${diffHours} hours') AND DATE('now','-1 day','+${diffHours} hours')
-                AND type = 0
-            GROUP BY
-                DATE(create_time,'+${diffHours} hours')
-            ORDER BY
-                date ASC
-        `).all();
-		return results;
+		return this.emailDayCount(c, diffHours, emailConst.type.RECEIVE);
 	},
 
 	async sendDayCount(c, diffHours) {
+		return this.emailDayCount(c, diffHours, emailConst.type.SEND);
+	},
+
+	async emailDayCount(c, diffHours, type) {
+		const { offset, inverse } = dayRangeBinds(diffHours);
 		const { results } = await c.env.db.prepare(`
             SELECT
-                DATE(create_time,'+${diffHours} hours') AS date,
+                DATE(create_time, ?1) AS date,
                 COUNT(*) AS total
             FROM
                 email
             WHERE
-			  				DATE(create_time,'+${diffHours} hours') BETWEEN DATE('now', '-15 days', '+${diffHours} hours') AND DATE('now','-1 day','+${diffHours} hours')
-                AND type = 1
+                type = ?3
+                AND create_time >= DATETIME(DATE('now', '-15 days', ?1), ?2)
+                AND create_time < DATETIME(DATE('now', ?1), ?2)
             GROUP BY
-                DATE(create_time,'+${diffHours} hours')
+                DATE(create_time, ?1)
             ORDER BY
                 date ASC
-        `).all();
+        `).bind(offset, inverse, type).all();
 		return results;
 	}
 

@@ -33,8 +33,27 @@ const dbInit = {
 		await this.v2_8DB(c);
 		await this.v2_9DB(c);
 		await this.v3_0DB(c);
+		await this.v3_1DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_1DB(c) {
+		const queryList = [
+			`CREATE INDEX IF NOT EXISTS idx_attachments_key ON attachments(key);`,
+			`CREATE INDEX IF NOT EXISTS idx_attachments_user ON attachments(user_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_attachments_account ON attachments(account_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_account_user_del ON account(user_id, is_del);`,
+			`CREATE INDEX IF NOT EXISTS idx_email_resend_email_id ON email(resend_email_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_email_account ON email(account_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_star_email ON star(email_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_oauth_user ON oauth(user_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_email_type_create_time ON email(type, create_time);`,
+			`CREATE INDEX IF NOT EXISTS idx_user_create_time ON user(create_time);`,
+			`DROP INDEX IF EXISTS idx_email_user_id_account_id;`
+		];
+
+		await this.runOptionalSqlList(c, queryList);
 	},
 
 	async v3_0DB(c) {

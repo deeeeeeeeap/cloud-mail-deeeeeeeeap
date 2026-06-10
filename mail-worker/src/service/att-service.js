@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import domainUtils from '../utils/domain-uitls';
 import settingService from "./setting-service";
 import BizError from '../error/biz-error';
+import { chunkArray } from '../utils/sql-utils';
 
 const NOT_FOUND_MESSAGE = 'Attachment not found';
 
@@ -309,38 +310,44 @@ const attService = {
 		await this.removeAttByField(c, 'email_id', emailIds);
 	},
 
-	selectByEmailIds(c, emailIds) {
-		return orm(c).select().from(att).where(
-			and(
-				inArray(att.emailId, emailIds),
-				eq(att.type, attConst.type.ATT)
-			))
-			.all();
+	async selectByEmailIds(c, emailIds) {
+		const rows = [];
+		for (const chunk of chunkArray(emailIds)) {
+			rows.push(...await orm(c).select().from(att).where(
+				and(
+					inArray(att.emailId, chunk),
+					eq(att.type, attConst.type.ATT)
+				))
+				.all());
+		}
+		return rows;
 	},
 
 	async removeAttByField(c, fieldName, fieldValues) {
 
+		//集合化：按 90 分块 IN 查询 + 删除，避免逐值全表 GROUP BY 聚合
+		//SELECT 与 DELETE 在同一 batch 内按 chunk 交错执行，跨 chunk 共用 key 的引用计数依然正确
 		const sqlList = [];
 
-		fieldValues.forEach(value => {
+		for (const chunk of chunkArray(fieldValues)) {
+			const placeholders = chunk.map(() => '?').join(',');
 
 			sqlList.push(
-
 				c.env.db.prepare(
-					`SELECT a.key, a.att_id
+					`SELECT a.key
 						FROM attachments a
-							   JOIN (SELECT key
-									 FROM attachments
-									 GROUP BY key
-									 HAVING COUNT (*) = 1) t
-									ON a.key = t.key
-						WHERE a.${fieldName} = ?;`
-					).bind(value)
-			)
+						WHERE a.${fieldName} IN (${placeholders})
+						GROUP BY a.key
+						HAVING COUNT(*) = (SELECT COUNT(*) FROM attachments t WHERE t.key = a.key);`
+				).bind(...chunk)
+			);
 
-			sqlList.push(c.env.db.prepare(`DELETE FROM attachments WHERE ${fieldName} = ?`).bind(value))
+			sqlList.push(c.env.db.prepare(`DELETE FROM attachments WHERE ${fieldName} IN (${placeholders})`).bind(...chunk));
+		}
 
-		});
+		if (sqlList.length === 0) {
+			return;
+		}
 
 		const attListResult = await c.env.db.batch(sqlList);
 
@@ -368,11 +375,15 @@ const attService = {
 		await this.removeAttByField(c, "account_id", [accountId])
 	},
 
-	selectOneByKeys(c, keys) {
+	async selectOneByKeys(c, keys) {
 		if (!keys || keys.length === 0) {
 			return []
 		}
-		return orm(c).select().from(att).where(inArray(att.key, keys)).orderBy(desc(att.attId)).groupBy(att.key).all();
+		const rows = [];
+		for (const chunk of chunkArray(keys)) {
+			rows.push(...await orm(c).select().from(att).where(inArray(att.key, chunk)).orderBy(desc(att.attId)).groupBy(att.key).all());
+		}
+		return rows;
 	}
 };
 

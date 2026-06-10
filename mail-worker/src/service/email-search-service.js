@@ -1,4 +1,5 @@
 import { emailConst, isDel } from '../const/entity-const';
+import { chunkArray, runBatch, truncateLikeTerm } from '../utils/sql-utils';
 
 export const EMAIL_SEARCH_BODY_LIMIT = 4000;
 
@@ -11,7 +12,7 @@ function isMissingSearchTable(error) {
 }
 
 function normalizeLike(value) {
-	return `%${String(value || '').trim().toLowerCase()}%`;
+	return `%${truncateLikeTerm(String(value || '').trim().toLowerCase())}%`;
 }
 
 function listColumns() {
@@ -161,13 +162,15 @@ const emailSearchService = {
 	},
 
 	async syncEmailIds(c, emailIds) {
-		if (!emailIds || emailIds.length === 0) {
+		const ids = [...new Set(emailIds || [])];
+		if (ids.length === 0) {
 			return;
 		}
 
 		try {
-			const placeholders = emailIds.map(() => '?').join(',');
-			await c.env.db.prepare(`
+			const statements = chunkArray(ids).map(chunk => {
+				const placeholders = chunk.map(() => '?').join(',');
+				return c.env.db.prepare(`
 				INSERT OR REPLACE INTO email_search (
 					email_id, user_id, account_id, name, subject, send_email, to_email, user_email,
 					search_text, type, status, is_del, create_time
@@ -196,7 +199,9 @@ const emailSearchService = {
 				FROM email e
 				LEFT JOIN user u ON u.user_id = e.user_id
 				WHERE e.email_id IN (${placeholders})
-			`).bind(...emailIds).run();
+			`).bind(...chunk);
+			});
+			await runBatch(c, statements);
 		} catch (error) {
 			if (!isMissingSearchTable(error)) {
 				throw error;
@@ -205,13 +210,17 @@ const emailSearchService = {
 	},
 
 	async removeEmailIds(c, emailIds) {
-		if (!emailIds || emailIds.length === 0) {
+		const ids = [...new Set(emailIds || [])];
+		if (ids.length === 0) {
 			return;
 		}
 
 		try {
-			const placeholders = emailIds.map(() => '?').join(',');
-			await c.env.db.prepare(`DELETE FROM email_search WHERE email_id IN (${placeholders})`).bind(...emailIds).run();
+			const statements = chunkArray(ids).map(chunk => {
+				const placeholders = chunk.map(() => '?').join(',');
+				return c.env.db.prepare(`DELETE FROM email_search WHERE email_id IN (${placeholders})`).bind(...chunk);
+			});
+			await runBatch(c, statements);
 		} catch (error) {
 			if (!isMissingSearchTable(error)) {
 				throw error;

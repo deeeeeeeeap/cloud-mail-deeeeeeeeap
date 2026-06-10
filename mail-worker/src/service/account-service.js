@@ -12,6 +12,7 @@ import turnstileService from './turnstile-service';
 import roleService from './role-service';
 import { t } from '../i18n/i18n';
 import verifyRecordService from './verify-record-service';
+import { chunkArray } from '../utils/sql-utils';
 
 const accountService = {
 
@@ -178,7 +179,9 @@ const accountService = {
 
 	async physicsDeleteByUserIds(c, userIds) {
 		await emailService.physicsDeleteUserIds(c, userIds);
-		await orm(c).delete(account).where(inArray(account.userId,userIds)).run();
+		for (const chunk of chunkArray(userIds)) {
+			await orm(c).delete(account).where(inArray(account.userId, chunk)).run();
+		}
 	},
 
 	async selectUserAccountCountList(c, userIds, del = isDel.NORMAL) {

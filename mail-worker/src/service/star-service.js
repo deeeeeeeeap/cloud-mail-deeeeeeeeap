@@ -7,6 +7,7 @@ import email from '../entity/email';
 import { isDel } from '../const/entity-const';
 import attService from "./att-service";
 import { t } from '../i18n/i18n'
+import { chunkArray } from '../utils/sql-utils';
 
 const starEmailListSelect = {
 	emailId: email.emailId,
@@ -128,7 +129,9 @@ const starService = {
 		return { list };
 	},
 	async removeByEmailIds(c, emailIds) {
-		await orm(c).delete(star).where(inArray(star.emailId, emailIds)).run();
+		for (const chunk of chunkArray(emailIds)) {
+			await orm(c).delete(star).where(inArray(star.emailId, chunk)).run();
+		}
 	}
 };
 

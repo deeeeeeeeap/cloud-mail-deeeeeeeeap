@@ -6,6 +6,7 @@ import BizError from '../error/biz-error';
 import { formatDetailDate, toUtc } from '../utils/date-uitil';
 import userService from './user-service';
 import { t } from '../i18n/i18n.js';
+import { chunkArray, truncateLikeTerm } from '../utils/sql-utils';
 
 const regKeyService = {
 
@@ -44,7 +45,9 @@ const regKeyService = {
 	async delete(c, params) {
 		let {regKeyIds} = params;
 		regKeyIds = regKeyIds.split(',').map(id => Number(id));
-		await orm(c).delete(regKey).where(inArray(regKey.regKeyId,regKeyIds)).run();
+		for (const chunk of chunkArray(regKeyIds)) {
+			await orm(c).delete(regKey).where(inArray(regKey.regKeyId, chunk)).run();
+		}
 	},
 
 	async clearNotUse(c) {
@@ -62,7 +65,7 @@ const regKeyService = {
 		let query = orm(c).select().from(regKey)
 
 		if (code) {
-			query = query.where(like(regKey.code, `${code}%`))
+			query = query.where(like(regKey.code, `${truncateLikeTerm(code, 1)}%`))
 		}
 
 		const regKeyList = await query.orderBy(desc(regKey.regKeyId)).all();

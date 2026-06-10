@@ -18,6 +18,7 @@ import { t } from '../i18n/i18n'
 import reqUtils from '../utils/req-utils';
 import {oauth} from "../entity/oauth";
 import oauthService from "./oauth-service";
+import { chunkArray, truncateLikeTerm } from '../utils/sql-utils';
 
 const userService = {
 
@@ -104,7 +105,9 @@ const userService = {
 		userIds = userIds.split(',').map(Number);
 		await accountService.physicsDeleteByUserIds(c, userIds);
 		await oauthService.deleteByUserIds(c, userIds);
-		await orm(c).delete(user).where(inArray(user.userId, userIds)).run();
+		for (const chunk of chunkArray(userIds)) {
+			await orm(c).delete(user).where(inArray(user.userId, chunk)).run();
+		}
 	},
 
 	async list(c, params) {
@@ -130,7 +133,7 @@ const userService = {
 
 
 		if (email) {
-			conditions.push(sql`${user.email} COLLATE NOCASE LIKE ${'%'+ email + '%'}`);
+			conditions.push(sql`${user.email} COLLATE NOCASE LIKE ${'%'+ truncateLikeTerm(email) + '%'}`);
 		}
 
 

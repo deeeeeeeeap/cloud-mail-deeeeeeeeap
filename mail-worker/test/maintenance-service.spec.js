@@ -124,19 +124,26 @@ describe('maintenance service', () => {
 		await expect(maintenanceService.repair(c, 'unknown')).rejects.toThrow('Unknown maintenance action');
 	});
 
-	it('rebuilds search table by clearing only the derived search index', async () => {
+	it('rebuilds search table in cursor batches without loading every id at once', async () => {
 		const statements = [];
+		const selectBatches = [[{ emailId: 1 }, { emailId: 2 }], []];
 		const c = {
 			env: {
 				db: {
 					prepare(sql) {
 						statements.push(sql);
-						return {
+						const statement = {
+							bindings: [],
+							bind(...args) {
+								statement.bindings = args;
+								return statement;
+							},
 							async run() {},
 							async all() {
-								return { results: [{ emailId: 1 }, { emailId: 2 }] };
+								return { results: selectBatches.shift() || [] };
 							}
 						};
+						return statement;
 					}
 				}
 			}
@@ -147,6 +154,8 @@ describe('maintenance service', () => {
 
 		expect(dbInit.runOptionalSqlList).toHaveBeenCalled();
 		expect(statements).toContain('DELETE FROM email_search');
+		expect(statements.some(sql => sql.includes('WHERE email_id > ?'))).toBe(true);
+		expect(emailSearchService.syncEmailIds).toHaveBeenCalledTimes(1);
 		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [1, 2]);
 	});
 
@@ -257,6 +266,29 @@ describe('maintenance service', () => {
 		expect(update.sql).toContain("datetime(create_time) < datetime('now', ?)");
 		expect(update.bindings).toEqual(['', 7, 8, '', 6, 0, '-15 minutes']);
 		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [7, 8]);
+	});
+
+	it('clears expired codes in chunks that respect the D1 bind limit', async () => {
+		const rows = Array.from({ length: 100 }, (_, index) => ({ emailId: index + 1 }));
+		const recorder = createMaintenanceDb([rows, []]);
+		const c = { env: { db: recorder.db } };
+		vi.spyOn(maintenanceService, 'health').mockResolvedValue({ ok: true });
+
+		const result = await maintenanceService.repair(c, 'codes-clear-stale');
+
+		expect(result.lastAction).toMatchObject({
+			action: 'codes-clear-stale',
+			cleared: 100
+		});
+
+		const updates = recorder.batched.filter(item => item.sql.includes('UPDATE email') && item.sql.includes('SET code'));
+		expect(updates).toHaveLength(2);
+		expect(updates[0].bindings).toHaveLength(95);
+		expect(updates[1].bindings).toHaveLength(15);
+		updates.forEach(update => {
+			expect(update.bindings.length).toBeLessThanOrEqual(100);
+		});
+		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, rows.map(row => row.emailId));
 	});
 
 	it('can dry-run expired code clearing without updating rows', async () => {

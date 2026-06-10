@@ -11,6 +11,7 @@ import verifyUtils from '../utils/verify-utils';
 import { t } from '../i18n/i18n.js';
 import emailUtils from '../utils/email-utils';
 import permService from './perm-service';
+import { chunkArray } from '../utils/sql-utils';
 
 const ROLE_CACHE_TTL = 30 * 1000;
 const roleCache = new Map();
@@ -244,13 +245,17 @@ const roleService = {
 		return orm(c).select().from(role).where(eq(role.name, roleName)).get();
 	},
 
-	selectByUserIds(c, userIds) {
+	async selectByUserIds(c, userIds) {
 
 		if (!userIds || userIds.length === 0) {
 			return [];
 		}
 
-		return orm(c).select({ ...role, userId: user.userId }).from(user).leftJoin(role, eq(role.roleId, user.type)).where(inArray(user.userId, userIds)).all();
+		const rows = [];
+		for (const chunk of chunkArray(userIds)) {
+			rows.push(...await orm(c).select({ ...role, userId: user.userId }).from(user).leftJoin(role, eq(role.roleId, user.type)).where(inArray(user.userId, chunk)).all());
+		}
+		return rows;
 
 	},
 

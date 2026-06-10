@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import { emailConst, isDel } from '../const/entity-const';
+import { truncateLikeTerm } from '../utils/sql-utils';
 
 export const CODE_STALE_MINUTES = 15;
 
@@ -20,7 +21,7 @@ function normalizeCursor(emailId, timeSort) {
 }
 
 function likeValue(value) {
-	return `%${String(value || '').trim().toLowerCase()}%`;
+	return `%${truncateLikeTerm(String(value || '').trim().toLowerCase())}%`;
 }
 
 function normalizeStale(stale) {

@@ -5,6 +5,7 @@ import { emailConst, isDel } from '../const/entity-const';
 import BizError from '../error/biz-error';
 import { extractCodeByPattern } from './ai-service';
 import { CODE_STALE_MINUTES } from './code-service';
+import { chunkArray, runBatch } from '../utils/sql-utils';
 
 const EXPECTED_EMAIL_COLUMNS = [
 	'email_id',
@@ -30,7 +31,17 @@ const EXPECTED_INDEXES = [
 	'idx_attachments_email_type',
 	'idx_star_user_email',
 	'idx_email_user_code_id',
-	'idx_email_code_id'
+	'idx_email_code_id',
+	'idx_attachments_key',
+	'idx_attachments_user',
+	'idx_attachments_account',
+	'idx_account_user_del',
+	'idx_email_resend_email_id',
+	'idx_email_account',
+	'idx_star_email',
+	'idx_oauth_user',
+	'idx_email_type_create_time',
+	'idx_user_create_time'
 ];
 
 const INDEX_SQL_LIST = [
@@ -40,7 +51,18 @@ const INDEX_SQL_LIST = [
 	`CREATE INDEX IF NOT EXISTS idx_attachments_email_type ON attachments(email_id, type);`,
 	`CREATE INDEX IF NOT EXISTS idx_star_user_email ON star(user_id, email_id);`,
 	`CREATE INDEX IF NOT EXISTS idx_email_user_code_id ON email(user_id, code, email_id);`,
-	`CREATE INDEX IF NOT EXISTS idx_email_code_id ON email(code, email_id);`
+	`CREATE INDEX IF NOT EXISTS idx_email_code_id ON email(code, email_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_attachments_key ON attachments(key);`,
+	`CREATE INDEX IF NOT EXISTS idx_attachments_user ON attachments(user_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_attachments_account ON attachments(account_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_account_user_del ON account(user_id, is_del);`,
+	`CREATE INDEX IF NOT EXISTS idx_email_resend_email_id ON email(resend_email_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_email_account ON email(account_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_star_email ON star(email_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_oauth_user ON oauth(user_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_email_type_create_time ON email(type, create_time);`,
+	`CREATE INDEX IF NOT EXISTS idx_user_create_time ON user(create_time);`,
+	`DROP INDEX IF EXISTS idx_email_user_id_account_id;`
 ];
 
 const SEARCH_TABLE_SQL_LIST = [
@@ -65,6 +87,7 @@ const SEARCH_TABLE_SQL_LIST = [
 ];
 
 const CODE_MAINTENANCE_BATCH_SIZE = 100;
+const SEARCH_REBUILD_BATCH_SIZE = 500;
 
 function normalizeStaleMinutes(value) {
 	const minutes = Number(value);
@@ -78,24 +101,6 @@ function isMissingTable(error, tableName) {
 	return new RegExp(`no such table: ${tableName}`, 'i').test(error?.message || '');
 }
 
-async function runStatements(c, statements) {
-	if (statements.length === 0) {
-		return;
-	}
-
-	if (c.env.db.batch) {
-		await c.env.db.batch(statements);
-		return;
-	}
-
-	await Promise.all(statements.map(statement => statement.run()));
-}
-
-async function syncChangedEmailIds(c, emailIds) {
-	for (let i = 0; i < emailIds.length; i += CODE_MAINTENANCE_BATCH_SIZE) {
-		await emailSearchService.syncEmailIds(c, emailIds.slice(i, i + CODE_MAINTENANCE_BATCH_SIZE));
-	}
-}
 
 const maintenanceService = {
 	async health(c) {
@@ -235,6 +240,7 @@ const maintenanceService = {
 
 		if (action === 'schema') {
 			await dbInit.v3_0DB(c);
+			await dbInit.v3_1DB(c);
 			return this.health(c);
 		}
 
@@ -246,8 +252,27 @@ const maintenanceService = {
 		if (action === 'search') {
 			await dbInit.runOptionalSqlList(c, SEARCH_TABLE_SQL_LIST);
 			await c.env.db.prepare(`DELETE FROM email_search`).run();
-			const ids = await c.env.db.prepare(`SELECT email_id AS emailId FROM email`).all();
-			await emailSearchService.syncEmailIds(c, (ids.results || []).map(row => row.emailId));
+
+			//游标分页重建，避免一次性把全表 email_id 载入内存
+			let cursorEmailId = 0;
+			while (true) {
+				const ids = await c.env.db.prepare(`
+					SELECT email_id AS emailId
+					FROM email
+					WHERE email_id > ?
+					ORDER BY email_id ASC
+					LIMIT ?
+				`).bind(cursorEmailId, SEARCH_REBUILD_BATCH_SIZE).all();
+
+				const emailIds = (ids.results || []).map(row => row.emailId);
+				if (emailIds.length === 0) {
+					break;
+				}
+
+				cursorEmailId = emailIds[emailIds.length - 1];
+				await emailSearchService.syncEmailIds(c, emailIds);
+			}
+
 			return this.health(c);
 		}
 
@@ -353,10 +378,10 @@ const maintenanceService = {
 				}
 			}
 
-			await runStatements(c, statements);
+			await runBatch(c, statements);
 		}
 
-		await syncChangedEmailIds(c, changedIds);
+		await emailSearchService.syncEmailIds(c, changedIds);
 
 		return {
 			action: existingOnly ? 'codes-clean' : 'codes-rescan',
@@ -414,8 +439,9 @@ const maintenanceService = {
 				break;
 			}
 
-			const placeholders = emailIds.map(() => '?').join(',');
-			await c.env.db.prepare(`
+			const statements = chunkArray(emailIds).map(chunk => {
+				const placeholders = chunk.map(() => '?').join(',');
+				return c.env.db.prepare(`
 				UPDATE email
 				SET code = ?
 				WHERE email_id IN (${placeholders})
@@ -423,12 +449,14 @@ const maintenanceService = {
 					AND status != ?
 					AND is_del = ?
 					AND datetime(create_time) < datetime('now', ?)
-			`).bind('', ...emailIds, '', emailConst.status.SAVING, isDel.NORMAL, staleWindow).run();
+			`).bind('', ...chunk, '', emailConst.status.SAVING, isDel.NORMAL, staleWindow);
+			});
+			await runBatch(c, statements);
 			changedIds.push(...emailIds);
 			cleared += emailIds.length;
 		}
 
-		await syncChangedEmailIds(c, changedIds);
+		await emailSearchService.syncEmailIds(c, changedIds);
 
 		return {
 			action: 'codes-clear-stale',

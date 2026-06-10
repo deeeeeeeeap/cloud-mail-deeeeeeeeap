@@ -1,6 +1,7 @@
 name = "test-mail"
 main = "src/index.js"
 compatibility_date = "2025-06-04"
+compatibility_flags = ["nodejs_als"]
 keep_vars = true
 
 [observability]
@@ -27,7 +28,7 @@ binding = "ai"
 binding = "assets"		#静态资源绑定名默认不可修改
 directory = "./dist"	#前端vue项目打包的静态资源存放位置,默认dist
 not_found_handling = "single-page-application"
-run_worker_first = true
+run_worker_first = ["/api/*", "/attachments/*", "/static/*"]	#仅动态路径先进Worker，其余静态资源由Assets直出
 
 [triggers]
 crons = ["*/30 * * * *", "0 16 * * *"]	#每30分钟刷新分析缓存，每天晚上12点执行每日任务
