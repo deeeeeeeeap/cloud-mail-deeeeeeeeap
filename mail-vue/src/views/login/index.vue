@@ -612,8 +612,8 @@ function submitRegister() {
   }
   @media (max-width: 767px) {
     border: 1px solid var(--login-border);
-    padding: 20px 18px;
-    border-radius: 6px;
+    padding: 24px 20px;
+    border-radius: var(--radius-lg);
     height: fit-content;
     width: 100%;
     margin-right: 18px;
@@ -623,18 +623,32 @@ function submitRegister() {
   .btn {
     height: 36px;
     width: 100%;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast),
+      background-color var(--transition-fast), border-color var(--transition-fast);
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(24, 144, 255, 0.22);
+    }
+
+    &:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
   }
 
   .form-desc {
-    margin-top: 5px;
-    margin-bottom: 18px;
+    margin-top: 6px;
+    margin-bottom: 22px;
+    font-size: 14px;
     color: var(--form-desc-color);
   }
 
   .form-title {
     font-weight: bold;
     font-size: 22px !important;
+    letter-spacing: 0.01em;
   }
 
   .switch {
@@ -644,16 +658,24 @@ function submitRegister() {
     span {
       color: var(--login-switch-color);
       cursor: pointer;
+      transition: opacity var(--transition-fast);
+
+      &:hover {
+        opacity: 0.75;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
     }
   }
 
   :deep(.el-input__wrapper) {
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     background: var(--el-bg-color);
+    transition: box-shadow var(--transition-fast);
   }
 
   .email-input :deep(.el-input__wrapper) {
-    border-radius: 6px 0 0 6px;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
     background: var(--el-bg-color);
   }
 
@@ -707,6 +729,12 @@ function submitRegister() {
   border: 1px solid var(--el-border-color-light);
   box-shadow: var(--el-box-shadow-light);
   cursor: pointer;
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card-hover);
+  }
 }
 
 :deep(.el-input-group__append) {
@@ -714,7 +742,7 @@ function submitRegister() {
   padding-left: 8px !important;
   padding-right: 4px !important;
   background: var(--el-bg-color);
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
 :deep(.el-button+.el-button) {

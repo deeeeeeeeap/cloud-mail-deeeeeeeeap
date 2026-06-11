@@ -398,7 +398,7 @@ const handleDelete = () => {
         div {
           align-self: center;
         }
-        background: var(--light-ill);
+        background: var(--light-fill);
         padding: 5px 7px;
         border-radius: 4px;
         align-self: start;

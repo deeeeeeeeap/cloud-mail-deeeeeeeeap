@@ -1222,7 +1222,7 @@ function adjustWidth() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--loadding-background);
+  background-color: var(--loading-background);
   left: 0;
   z-index: 2;
   top: 0;

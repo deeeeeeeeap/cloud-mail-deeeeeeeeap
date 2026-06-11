@@ -490,7 +490,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   position: absolute;
-  background: var(--loadding-background);
+  background: var(--loading-background);
   z-index: 2;
 }
 

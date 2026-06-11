@@ -1080,7 +1080,7 @@ function loadData() {
     display: flex;
     justify-content: center;
     align-items: center;
-    background: var(--loadding-background);
+    background: var(--loading-background);
     height: 100%;
     width: 100%;
     position: absolute;
@@ -1109,7 +1109,7 @@ function loadData() {
   cursor: pointer;
   align-items: center;
   position: relative;
-  transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
   height: 48px;
   @media (max-width: 1366px) {
     height: 83px;
@@ -1357,9 +1357,11 @@ function loadData() {
     z-index: 0;
   }
 
-  /*&[data-checked="true"] {
-    background-color: #c2dbff;
-  }*/
+  /* 勾选行给出明确但不刺眼的选中态 */
+  &[data-checked="true"],
+  &[data-checked="true"]:hover {
+    background-color: var(--el-color-primary-light-9);
+  }
 }
 
 
@@ -1471,6 +1473,7 @@ function loadData() {
   height: 6px;
   width: 6px;
   background: var(--el-color-primary);
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-9);
   margin-bottom: 2px;
   margin-right: 5px;
   border-radius: 50%;

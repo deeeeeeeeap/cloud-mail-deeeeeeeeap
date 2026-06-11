@@ -263,7 +263,7 @@ function formatName(email) {
 <style lang="scss" scoped>
 
 :deep(.el-popper.is-pure) {
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .user-details {
@@ -381,7 +381,7 @@ function formatName(email) {
     border-radius: 50%;
     color: #ffffff;
     background: linear-gradient(135deg, #1890ff, #3a80dd);
-    transition: all 0.3s ease;
+    transition: box-shadow var(--transition-base), transform var(--transition-base);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -389,8 +389,18 @@ function formatName(email) {
     .writer-text {
       margin-left: 15px;
       font-size: 14px;
-      font-weight: bold;;
+      font-weight: bold;
     }
+  }
+
+  &:hover .writer {
+    box-shadow: 0 4px 10px rgba(24, 144, 255, 0.35);
+    transform: translateY(-1px);
+  }
+
+  &:active .writer {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(24, 144, 255, 0.25);
   }
 }
 
@@ -422,15 +432,20 @@ function formatName(email) {
     align-self: center;
     width: 30px;
     height: 30px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
   }
 
   .icon-item:hover {
     background: var(--base-fill);
+  }
+
+  .icon-item:active {
+    transform: scale(0.92);
   }
 
   .notice {
@@ -459,8 +474,14 @@ function formatName(email) {
       display: flex;
       justify-content: center;
       align-items: center;
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       border: 1px solid var(--dark-border);
+      transition: border-color var(--transition-base), box-shadow var(--transition-base);
+    }
+
+    &:hover .avatar-text {
+      border-color: var(--el-color-primary);
+      box-shadow: 0 0 0 2px var(--el-color-primary-light-9);
     }
 
     .setting-icon {

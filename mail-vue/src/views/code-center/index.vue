@@ -262,6 +262,15 @@ getList(true)
 
   .icon {
     cursor: pointer;
+    transition: color var(--transition-fast), transform var(--transition-fast);
+
+    &:hover {
+      color: var(--el-color-primary);
+    }
+
+    &:active {
+      transform: scale(0.92);
+    }
   }
 }
 
@@ -299,23 +308,28 @@ getList(true)
 
   .code-item {
     background: var(--el-bg-color);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--el-border-color);
-    transition: all 200ms;
+    box-shadow: var(--shadow-card);
+    transition: border-color var(--transition-base), box-shadow var(--transition-base),
+      transform var(--transition-base), opacity var(--transition-base);
     padding: 15px;
     cursor: pointer;
 
     &.stale {
       opacity: 0.62;
+      box-shadow: none;
     }
 
     &.copied {
       border-color: var(--el-color-primary);
-      box-shadow: 0 0 0 1px var(--el-color-primary-light-7);
+      box-shadow: 0 0 0 2px var(--el-color-primary-light-7);
     }
 
     &:hover {
       border-color: var(--el-color-primary-light-5);
+      box-shadow: var(--shadow-card-hover);
+      transform: translateY(-1px);
     }
 
     &:focus-visible {
@@ -349,12 +363,16 @@ getList(true)
     .code {
       font-weight: bold;
       font-size: 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: 0.04em;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       cursor: pointer;
 
       &.hidden {
+        font-family: inherit;
+        letter-spacing: normal;
         color: var(--el-text-color-secondary);
         cursor: default;
       }
@@ -431,7 +449,7 @@ getList(true)
   display: flex;
   justify-content: center;
   align-items: center;
-  background: var(--loadding-background);
+  background: var(--loading-background);
   z-index: 2;
 }
 

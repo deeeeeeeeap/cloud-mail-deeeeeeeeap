@@ -1814,7 +1814,7 @@ function editSetting(settingForm, refreshStatus = true) {
 }
 
 .error-image {
-  background: var(--light-ill);
+  background: var(--light-fill);
   height: 100%;
   display: flex;
   align-items: center;

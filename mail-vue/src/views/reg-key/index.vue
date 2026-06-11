@@ -504,7 +504,7 @@ function openAdd() {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: var(--loadding-background);
+  background: var(--loading-background);
   z-index: 2;
 }
 

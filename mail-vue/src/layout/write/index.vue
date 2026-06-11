@@ -729,7 +729,7 @@ function close() {
             height: 32px;
             font-size: 14px;
             padding: 4px 5px;
-            background: var(--light-ill);
+            background: var(--light-fill);
             border-radius: 4px;
             .att-filename {
               white-space: nowrap;

@@ -132,28 +132,57 @@ const route = useRoute();
 
 
 .manage-title {
-  margin-top: 10px;
+  margin-top: 14px;
   padding-left: 20px;
-  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.45);
+  user-select: none;
 }
 
 .el-menu-item {
+  position: relative;
   margin: 5px 10px !important;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   height: 36px;
   padding: 10px !important;
+  transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+/* 选中项左侧主色指示条，不挤占布局 */
+.el-menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--el-color-primary);
+  opacity: 0;
+  transform: translateY(-50%) scaleY(0.4);
+  transition: opacity var(--transition-base), transform var(--transition-base);
 }
 
 .choose-item {
   font-weight: bold;
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
   backdrop-filter: blur(4px);
 }
 
+.choose-item::before {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+}
+
 @media (hover: hover) {
-  .el-menu-item:hover {
-    background: rgba(255, 255, 255, 0.08) !important;
+  .el-menu-item:not(.choose-item):hover {
+    background: rgba(255, 255, 255, 0.06) !important;
   }
+}
+
+.el-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.06) !important;
 }
 
 .menu-name {
@@ -162,15 +191,15 @@ const route = useRoute();
 
 
 :deep(.el-scrollbar__wrap--hidden-default ) {
-  background: var(--aside-backgound) !important;
+  background: var(--aside-background) !important;
 }
 
 :deep(.el-menu-item) {
-  background: var(--aside-backgound);
+  background: var(--aside-background);
 }
 
 :deep(.el-menu) {
-  background: var(--aside-backgound);
+  background: var(--aside-background);
 }
 
 .el-menu {
@@ -179,11 +208,7 @@ const route = useRoute();
 }
 
 :deep(.el-divider__text) {
-  background: var(--aside-backgound);
+  background: var(--aside-background);
   color: #FFFFFF;
-}
-
-.scroll {
-
 }
 </style>

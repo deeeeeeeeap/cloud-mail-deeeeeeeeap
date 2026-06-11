@@ -113,12 +113,21 @@ button, input, select, textarea {
     --el-color-primary-light-7: #91d5ff;
     --el-color-primary-light-9: #e6f7ff;
 
+    /* 设计令牌：圆角 / 阴影 / 过渡，全局统一引用 */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+    --transition-fast: 150ms ease;
+    --transition-base: 200ms ease;
+
     --extra-light-fill: #FAFCFF;
-    --light-ill: #F5F7FA;
+    --light-fill: #F5F7FA;
     --light-border: #E4E7ED;
     --header-actions-border: inset 0 -1px 0 0 var(--el-border-color-lighter);
-    --aside-backgound: #001529;
-    --loadding-background: rgba(255, 255, 255, 0.8);
+    --aside-background: #001529;
+    --loading-background: rgba(255, 255, 255, 0.8);
     --dark-border: #CDD0D6;
     --base-fill: #F0F2F5;
     --regular-text-color: #585d69;
@@ -143,12 +152,15 @@ button, input, select, textarea {
 }
 
 .dark {
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.25);
+
     --extra-light-fill: #191919;
-    --light-ill: #262727;
+    --light-fill: #262727;
     --light-border: #414243;
-    --aside-backgound: #141414;
+    --aside-background: #141414;
     --header-actions-border: inset 0 -1px 0 0 var(--el-border-color-lighter);
-    --loadding-background: rgba(0, 0, 0, 0.3);
+    --loading-background: rgba(0, 0, 0, 0.3);
     --dark-border: #636466;
     --base-fill: #303030;
     --regular-text-color: #bfbdbc;
