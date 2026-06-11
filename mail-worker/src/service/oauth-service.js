@@ -5,15 +5,30 @@ import { eq, inArray } from 'drizzle-orm';
 import userService from "./user-service";
 import loginService from "./login-service";
 import cryptoUtils from "../utils/crypto-utils";
+import jwtUtils from "../utils/jwt-utils";
 import { chunkArray } from '../utils/sql-utils';
+
+const BIND_TOKEN_EXPIRES_SECONDS = 600;
 
 const oauthService = {
 
 	async bindUser(c, params) {
 
-		const { email, oauthUserId, code } = params;
+		const { email, bindToken, code } = params;
+
+		// 绑定凭证由 linuxDoLogin 签发，防止凭公开的第三方用户 ID 抢绑他人账号
+		const payload = bindToken ? await jwtUtils.verifyToken(c, bindToken) : null;
+		const oauthUserId = payload?.bindOauthUserId;
+
+		if (!oauthUserId) {
+			throw new BizError('绑定凭证无效或已过期, 请重新登录 Invalid or expired bind token');
+		}
 
 		const oauthRow = await this.getById(c, oauthUserId);
+
+		if (!oauthRow) {
+			throw new BizError('绑定凭证无效或已过期, 请重新登录 Invalid or expired bind token');
+		}
 
 		let userRow = await userService.selectByIdIncludeDel(c, oauthRow.userId);
 
@@ -79,7 +94,8 @@ const oauthService = {
 		const userRow = await userService.selectByIdIncludeDel(c, oauthRow.userId);
 
 		if (!userRow) {
-			return { userInfo: oauthRow, token: null }
+			const bindToken = await jwtUtils.generateToken(c, { bindOauthUserId: oauthRow.oauthUserId }, BIND_TOKEN_EXPIRES_SECONDS);
+			return { userInfo: oauthRow, token: null, bindToken }
 		}
 
 		const JwtToken = await loginService.login(c, { email: userRow.email, password: null }, true);

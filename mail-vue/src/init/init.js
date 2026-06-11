@@ -46,6 +46,10 @@ export async function init() {
             routers.forEach(routerData => {
                 router.addRoute('layout', routerData);
             });
+        } else if (localStorage.getItem('token')) {
+            // 非 401 失败(网络/服务端错误)时 token 仍在本地：
+            // 清除登录态回到登录页，避免带着空用户信息进入主界面导致渲染崩溃
+            localStorage.removeItem('token');
         }
 
     } else {

@@ -177,7 +177,7 @@ const show = ref('login')
 
 const bindForm = reactive({
   email: '',
-  oauthUserId: '',
+  bindToken: '',
   code: ''
 })
 
@@ -288,7 +288,7 @@ async function linuxDoGetUser() {
     oauthLoading.value = true
     oauthLinuxDoLogin(code).then(data => {
 
-      bindForm.oauthUserId = data.userInfo.oauthUserId;
+      bindForm.bindToken = data.bindToken || '';
 
       if (!data.token) {
         showBindForm.value = true
@@ -302,7 +302,7 @@ async function linuxDoGetUser() {
         return;
       }
 
-      saveToken(data.token);
+      return saveToken(data.token);
     }).catch(() => {
       oauthLoading.value = false
     })
@@ -359,11 +359,11 @@ function bind() {
 
   }
 
-  const form = {email, oauthUserId: bindForm.oauthUserId, code: bindForm.code}
+  const form = {email, bindToken: bindForm.bindToken, code: bindForm.code}
 
   bindLoading.value = true
   oauthBindUser(form).then(data => {
-    saveToken(data.token)
+    return saveToken(data.token)
   }).catch(() => {
     bindLoading.value = false
   })
@@ -403,7 +403,7 @@ const submit = () => {
   loginLoading.value = true
   login(email, form.password).then(async data => {
     await saveToken(data.token)
-  }).finally(() => {
+  }).catch(() => {}).finally(() => {
     loginLoading.value = false
   })
 }
@@ -411,18 +411,25 @@ const submit = () => {
 async function saveToken(token) {
   localStorage.setItem('token', token)
   refreshWebsiteConfig()
-  const user = await loginUserInfo();
-  accountStore.currentAccountId = user.account.accountId;
-  accountStore.currentAccount = user.account;
-  userStore.user = user;
-  const routers = permsToRouter(user.permKeys);
-  routers.forEach(routerData => {
-    router.addRoute('layout', routerData);
-  });
-  await router.replace({name: 'layout'})
+  try {
+    const user = await loginUserInfo();
+    accountStore.currentAccountId = user.account.accountId;
+    accountStore.currentAccount = user.account;
+    userStore.user = user;
+    const routers = permsToRouter(user.permKeys);
+    routers.forEach(routerData => {
+      router.addRoute('layout', routerData);
+    });
+    await router.replace({name: 'layout'})
+  } catch (e) {
+    // 用户信息拉取失败则不能保留登录态，否则后续进入主界面会因空用户信息崩溃
+    localStorage.removeItem('token')
+    throw e
+  } finally {
+    oauthLoading.value = false;
+    bindLoading.value = false;
+  }
   uiStore.showNotice()
-  oauthLoading.value = false;
-  bindLoading.value = false;
 }
 
 function refreshWebsiteConfig() {

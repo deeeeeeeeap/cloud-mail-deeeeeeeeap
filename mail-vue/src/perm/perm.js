@@ -3,7 +3,7 @@ import {useUserStore} from "@/store/user.js";
 export default {
     mounted(el, binding) {
         const userStore = useUserStore();
-        const permKeys = userStore.user.permKeys;
+        const permKeys = userStore.user.permKeys ?? [];
         const value = binding.value;
 
         if (permKeys.includes('*')) {
@@ -21,7 +21,7 @@ export default {
 }
 
 export function hasPerm(permKey) {
-    const {permKeys} = useUserStore().user;
+    const permKeys = useUserStore().user.permKeys ?? [];
     return permKeys.includes('*') || permKeys.includes(permKey);
 }
 

@@ -1,6 +1,9 @@
 <template>
   <div v-if="analysisLoading" class="analysis-loading">
-    <loading/>
+    <el-empty v-if="loadFailed" :description="$t('listLoadFailed')">
+      <el-button type="primary" @click="retryLoad">{{ $t('retry') }}</el-button>
+    </el-empty>
+    <loading v-else/>
   </div>
   <el-scrollbar v-else style="height: 100%;">
     <div class="analysis" :key="boxKey">
@@ -144,6 +147,7 @@ const sendTotal = ref(0)
 const accountTotal = ref(0)
 const userTotal = ref(0)
 const analysisLoading = ref(true)
+const loadFailed = ref(false)
 
 const numberCount = reactive({
   normalReceiveTotal: 0,
@@ -209,6 +213,15 @@ let analysisDark = uiStore.dark
 
 onMounted(() => {
   window.addEventListener('resize', handleResize)
+  loadAnalysis()
+})
+
+function retryLoad() {
+  loadFailed.value = false
+  loadAnalysis()
+}
+
+function loadAnalysis() {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   analysisEcharts(timeZone).then(data => {
@@ -241,9 +254,11 @@ onMounted(() => {
     analysisLoading.value = false
     initPicture();
     first = false
+  }).catch(e => {
+    console.error('统计数据加载失败', e)
+    loadFailed.value = true
   })
-
-})
+}
 
 const widthChange = debounce(initPicture, 500, {
   leading: false,

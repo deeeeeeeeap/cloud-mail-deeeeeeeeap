@@ -190,6 +190,10 @@ const userService = {
 
 			const userId = user.userId;
 
+			// 管理列表不返回密码哈希和盐
+			delete user.password;
+			delete user.salt;
+
 			user.receiveEmailCount = receiveMap[userId] || 0;
 			user.sendEmailCount = sendMap[userId] || 0;
 			user.accountCount = accountMap[userId] || 0;

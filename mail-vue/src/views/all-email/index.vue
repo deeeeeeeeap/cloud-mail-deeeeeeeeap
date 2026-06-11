@@ -92,7 +92,7 @@
 <script setup>
 import {starAdd, starCancel} from "@/request/star.js";
 import emailScroll from "@/components/email-scroll/index.vue"
-import {computed, defineOptions, reactive, ref, watch, onMounted} from "vue";
+import {computed, defineOptions, reactive, ref, watch, onMounted, onUnmounted} from "vue";
 import {useEmailStore} from "@/store/email.js";
 import {
   allEmailList,
@@ -303,16 +303,27 @@ function getEmailList(emailId, size, withTotal = 1) {
   return allEmailList({emailId, size, withTotal, ...params})
 }
 
+// 组件卸载(如登出)时终止轮询循环，避免重复登录后累积多个常驻循环
+let stopped = false
+onUnmounted(() => {
+  stopped = true
+})
+
 async function latest() {
 
-  while (true) {
+  while (!stopped) {
 
     let autoRefresh = settingStore.settings.autoRefresh;
 
-    await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 3000);
+    //自动刷新关闭时拉长空转间隔
+    await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 30000);
 
     //页面在后台时暂停轮询
     await waitUntilVisible();
+
+    if (stopped) {
+      return;
+    }
 
     const latestId = sysEmailScroll.value.latestEmail?.emailId
 

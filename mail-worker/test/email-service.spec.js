@@ -199,18 +199,23 @@ describe('email service status synchronization', () => {
 		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [99]);
 	});
 
-	it('only completes non-deleted SAVING messages and syncs the affected search rows', async () => {
+	it('recovers stale SAVING messages regardless of is_del and restores them to normal', async () => {
 		const recorder = createDbRecorder([{ emailId: 1 }, { emailId: 2 }]);
 		const c = { env: { db: recorder.db } };
 		mockState.selectResults = [[{ emailId: 1 }, { emailId: 2 }]];
 
 		await emailService.completeReceiveAll(c);
 
+		const selectStatement = recorder.statements.find(statement => statement.sql.includes('SELECT email_id'));
+		expect(selectStatement.sql).not.toContain('is_del = ?');
+		expect(selectStatement.sql).toContain("datetime('now', '-10 minutes')");
+
 		const updateStatements = recorder.statements.filter(statement => statement.sql.includes('UPDATE email'));
 		expect(updateStatements).toHaveLength(2);
-		expect(updateStatements.every(statement => statement.sql.includes('is_del'))).toBe(true);
-		expect(updateStatements[0].bindings).toEqual([emailConst.status.RECEIVE, emailConst.status.SAVING, isDel.NORMAL, emailConst.type.RECEIVE]);
-		expect(updateStatements[1].bindings).toEqual([emailConst.status.NOONE, emailConst.status.SAVING, isDel.NORMAL, emailConst.type.RECEIVE]);
+		expect(updateStatements.every(statement => statement.sql.includes('is_del = ?'))).toBe(true);
+		expect(updateStatements.every(statement => statement.sql.includes("datetime('now', '-10 minutes')"))).toBe(true);
+		expect(updateStatements[0].bindings).toEqual([emailConst.status.RECEIVE, isDel.NORMAL, emailConst.status.SAVING, emailConst.type.RECEIVE]);
+		expect(updateStatements[1].bindings).toEqual([emailConst.status.NOONE, isDel.NORMAL, emailConst.status.SAVING, emailConst.type.RECEIVE]);
 		expect(emailSearchService.syncEmailIds).toHaveBeenCalledWith(c, [1, 2]);
 	});
 

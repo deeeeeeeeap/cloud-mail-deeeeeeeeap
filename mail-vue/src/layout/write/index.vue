@@ -265,6 +265,10 @@ function delAtt(index) {
   form.attachments.splice(index, 1);
 }
 
+//附件大小限制：base64 内联在 JSON 里发送，过大会拖垮内存和请求
+const MAX_ATT_SIZE_MB = 25
+const MAX_ATT_TOTAL_SIZE_MB = 30
+
 function chooseFile() {
   const doc = document.createElement("input")
   doc.setAttribute("type", "file")
@@ -279,6 +283,26 @@ function chooseFile() {
       const size = file.size
       const filename = file.name
       const contentType = file.type
+
+      if (size > MAX_ATT_SIZE_MB * 1024 * 1024) {
+        ElMessage({
+          message: t('attTooLargeMsg', {name: filename, size: MAX_ATT_SIZE_MB}),
+          type: 'error',
+          plain: true,
+        })
+        continue
+      }
+
+      const currentTotal = form.attachments.reduce((sum, att) => sum + (att.size || 0), 0)
+
+      if (currentTotal + size > MAX_ATT_TOTAL_SIZE_MB * 1024 * 1024) {
+        ElMessage({
+          message: t('attTotalTooLargeMsg', {size: MAX_ATT_TOTAL_SIZE_MB}),
+          type: 'error',
+          plain: true,
+        })
+        break
+      }
 
       const content = await fileToBase64(file)
       form.attachments.push({content, filename, size, contentType})

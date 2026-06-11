@@ -4,7 +4,9 @@ import i18n from "@/i18n/index.js";
 import {useSettingStore} from "@/store/setting.js";
 
 let http = axios.create({
-    baseURL: import.meta.env.VITE_BASE_URL
+    baseURL: import.meta.env.VITE_BASE_URL,
+    // 全局兜底超时，避免请求无限 pending；长耗时请求(发信/轮询)单独放宽
+    timeout: 30 * 1000
 });
 
 http.interceptors.request.use(config => {
@@ -72,8 +74,12 @@ http.interceptors.response.use((res) => {
     (error) => {
 
         if (error.status === 403) {
-            location.reload();
-            return;
+            // 只自动刷新一次以触发可能的人机验证页，避免持续 403 时无限刷新
+            if (!sessionStorage.getItem('reloaded-on-403')) {
+                sessionStorage.setItem('reloaded-on-403', '1');
+                location.reload();
+                return;
+            }
         }
 
         const noMsg = error.config.noMsg;
@@ -95,7 +101,6 @@ http.interceptors.response.use((res) => {
                 plain: true,
                 grouping: true
             })
-            ElMessage.error('')
         } else if (error.response) {
             ElMessage({
                 message: i18n.global.t('serverBusyErrorMsg'),

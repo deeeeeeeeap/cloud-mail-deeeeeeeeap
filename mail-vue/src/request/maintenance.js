@@ -5,5 +5,6 @@ export function maintenanceHealth() {
 }
 
 export function maintenanceRepair(action) {
-    return http.post('/maintenance/repair', {action})
+    // 重建搜索表/重扫验证码等修复操作耗时较长，放宽超时
+    return http.post('/maintenance/repair', {action}, {timeout: 300 * 1000})
 }

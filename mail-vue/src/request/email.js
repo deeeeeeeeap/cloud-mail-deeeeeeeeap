@@ -25,6 +25,8 @@ export function emailSend(form,progress) {
         onUploadProgress: (e) => {
             progress(e)
         },
-        noMsg: true
+        noMsg: true,
+        // 带附件的发信耗时较长，放宽超时
+        timeout: 120 * 1000
     })
 }

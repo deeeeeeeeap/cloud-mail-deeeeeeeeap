@@ -1201,21 +1201,23 @@ const emailService = {
 	},
 
 	async completeReceiveAll(c) {
+		// 收信插入时是 is_del=DELETE + status=SAVING，崩溃后会停留在该状态；
+		// 这里不过滤 is_del 并把它一并恢复为 NORMAL，只处理超过 10 分钟的行，避免碰到正在收信的邮件
 		const { results: pendingRows = [] } = await c.env.db.prepare(`
 			SELECT email_id AS emailId
 			FROM email
-			WHERE status = ? AND is_del = ? AND type = ?
-		`).bind(emailConst.status.SAVING, isDel.NORMAL, emailConst.type.RECEIVE).all();
+			WHERE status = ? AND type = ? AND create_time <= datetime('now', '-10 minutes')
+		`).bind(emailConst.status.SAVING, emailConst.type.RECEIVE).all();
 		await c.env.db.prepare(`
 			UPDATE email as e
-			SET status = ?
-			WHERE status = ? AND is_del = ? AND type = ? AND EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)
-		`).bind(emailConst.status.RECEIVE, emailConst.status.SAVING, isDel.NORMAL, emailConst.type.RECEIVE).run();
+			SET status = ?, is_del = ?
+			WHERE status = ? AND type = ? AND create_time <= datetime('now', '-10 minutes') AND EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)
+		`).bind(emailConst.status.RECEIVE, isDel.NORMAL, emailConst.status.SAVING, emailConst.type.RECEIVE).run();
 		await c.env.db.prepare(`
 			UPDATE email as e
-			SET status = ?
-			WHERE status = ? AND is_del = ? AND type = ? AND NOT EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)
-		`).bind(emailConst.status.NOONE, emailConst.status.SAVING, isDel.NORMAL, emailConst.type.RECEIVE).run();
+			SET status = ?, is_del = ?
+			WHERE status = ? AND type = ? AND create_time <= datetime('now', '-10 minutes') AND NOT EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)
+		`).bind(emailConst.status.NOONE, isDel.NORMAL, emailConst.status.SAVING, emailConst.type.RECEIVE).run();
 		await emailSearchService.syncEmailIds(c, pendingRows.map(row => row.emailId));
 	},
 

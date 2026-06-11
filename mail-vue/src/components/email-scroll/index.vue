@@ -140,8 +140,13 @@
                        :showStatus="showStatus"
                        :showUserInfo="showUserInfo"
                        :type="type"/>
-      <div class="empty" v-if="noLoading && emailList.length === 0 && !loading">
+      <div class="empty" v-if="noLoading && emailList.length === 0 && !loading && !loadError">
         <el-empty :image-size="isMobile ? 120 : null" :description="$t('noMessagesFound')"/>
+      </div>
+      <div class="empty" v-if="loadError && emailList.length === 0 && !loading">
+        <el-empty :image-size="isMobile ? 120 : null" :description="$t('listLoadFailed')">
+          <el-button type="primary" @click="refresh">{{ $t('retry') }}</el-button>
+        </el-empty>
       </div>
     </div>
     <el-dropdown
@@ -309,6 +314,7 @@ const emailStore = useEmailStore();
 const loading = ref(false);
 const followLoading = ref(false);
 const noLoading = ref(false);
+const loadError = ref(false);
 const emailList = reactive([])
 const expandList = reactive([])
 const total = ref(0);
@@ -926,6 +932,7 @@ function getEmailList(refresh = false) {
     }
 
     firstLoad.value = false
+    loadError.value = false
 
     let list = data.list.map(item => ({
       ...item,
@@ -950,6 +957,15 @@ function getEmailList(refresh = false) {
       total.value = data.total;
     }
     prefetchNextPage(listVersion);
+  }).catch(e => {
+    if (requestVersion !== listVersion) {
+      return;
+    }
+    console.error('邮件列表加载失败', e);
+    // 失败时退出骨架屏并解锁翻页，错误提示由 axios 拦截器统一弹出
+    firstLoad.value = false;
+    followLoading.value = false;
+    loadError.value = true;
   }).finally(() => {
     loading.value = false
     reqLock = false
@@ -1021,6 +1037,7 @@ function refresh() {
 function refreshList() {
   checkAll.value = false;
   isIndeterminate.value = false;
+  loadError.value = false;
   listVersion++;
   prefetchedPage = null;
   prefetchingPage = null;

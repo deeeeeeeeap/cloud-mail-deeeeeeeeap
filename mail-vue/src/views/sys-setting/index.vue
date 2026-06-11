@@ -1,7 +1,10 @@
 <template>
   <div class="settings-container">
     <div class="loading" :class="firstLoading ? 'loading-show' : 'loading-hide'">
-      <loading/>
+      <el-empty v-if="settingLoadFailed" :description="$t('listLoadFailed')">
+        <el-button type="primary" @click="retryGetSettings">{{ $t('retry') }}</el-button>
+      </el-empty>
+      <loading v-else/>
     </div>
     <el-scrollbar class="scroll" v-if="!firstLoading">
       <div class="scroll-body">
@@ -837,6 +840,7 @@ const hasUpdate = ref(false)
 let getUpdateErrorCount = 1;
 const {t, locale} = useI18n();
 const firstLoading = ref(true)
+const settingLoadFailed = ref(false)
 const settingReady = ref(false)
 const backgroundImage = ref('')
 const localUpShow = ref(false)
@@ -946,6 +950,11 @@ const tgMsgLabelWidth = computed(() => locale.value === 'en' ? '120px' : '100px'
 getSettings()
 getUpdate()
 
+function retryGetSettings() {
+  settingLoadFailed.value = false
+  getSettings()
+}
+
 function getSettings() {
   settingReady.value = false
   settingQuery().then(settingData => {
@@ -968,6 +977,10 @@ function getSettings() {
     nextTick(() => {
       settingReady.value = true
     })
+  }).catch(e => {
+    // 设置拉取失败时保持遮罩并提供重试，避免渲染默认值导致误保存
+    console.error('系统设置加载失败', e)
+    settingLoadFailed.value = true
   })
 }
 

@@ -30,7 +30,7 @@ import {useSettingStore} from "@/store/setting.js";
 import emailScroll from "@/components/email-scroll/index.vue"
 import {emailList, emailDelete, emailDetail, emailLatest, emailRead} from "@/request/email.js";
 import {starAdd, starCancel} from "@/request/star.js";
-import {defineOptions, h, onMounted, reactive, ref, watch} from "vue";
+import {defineOptions, h, onMounted, onUnmounted, reactive, ref, watch} from "vue";
 import {sleep, waitUntilVisible} from "@/utils/time-utils.js";
 import router from "@/router/index.js";
 import {Icon} from "@iconify/vue";
@@ -54,8 +54,14 @@ onMounted(() => {
   latest()
 })
 
+// 组件卸载(如登出)时终止轮询循环，避免重复登录后累积多个常驻循环
+let stopped = false
+onUnmounted(() => {
+  stopped = true
+})
 
 watch(() => accountStore.currentAccountId, () => {
+  existIds.clear();
   scroll.value.refreshList();
 })
 
@@ -76,13 +82,18 @@ function jumpContent(email) {
 const existIds = new Set();
 
 async function latest() {
-  while (true) {
+  while (!stopped) {
 
     let autoRefresh = settingStore.settings.autoRefresh;
-    await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 3000);
+    //自动刷新关闭时拉长空转间隔
+    await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 30000);
 
     //页面在后台时暂停轮询
     await waitUntilVisible();
+
+    if (stopped) {
+      return;
+    }
 
     if (route.name !== 'email') {
       continue;
