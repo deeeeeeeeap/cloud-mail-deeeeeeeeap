@@ -92,6 +92,82 @@ describe('ai service code extraction', () => {
 		}
 	});
 
+	it('extracts codes from table-layout html emails without a text part', () => {
+		const code = extractCodeByPattern({
+			subject: 'Verify your email',
+			html: '<table><tr><td>Your verification code is</td></tr><tr><td>483920</td></tr></table>'
+		});
+
+		expect(code).toBe('483920');
+	});
+
+	it('extracts digit-per-cell codes from table html', () => {
+		const cells = '483920'.split('').map(digit => `<td>${digit}</td>`).join('');
+		const code = extractCodeByPattern({
+			subject: 'Verify your email',
+			html: `<p>Your verification code:</p><table><tr>${cells}</tr></table>`
+		});
+
+		expect(code).toBe('483920');
+	});
+
+	it('extracts codes from style-heavy html emails with a generic subject', () => {
+		const code = extractCodeByPattern({
+			subject: 'Welcome to Example',
+			html: '<style>' + '.a{color:#fff;} '.repeat(900) + '</style><p>Your verification code is</p><p>483920</p>'
+		});
+
+		expect(code).toBe('483920');
+	});
+
+	it('extracts codes sharing a line with an email address or url', () => {
+		expect(extractCodeByPattern({
+			subject: 'Sign-in verification',
+			text: 'Hi john@example.com, your verification code is 483920.'
+		})).toBe('483920');
+
+		expect(extractCodeByPattern({
+			subject: 'Sign-in verification',
+			text: 'Enter verification code 483920 or visit https://example.com/help to continue.'
+		})).toBe('483920');
+	});
+
+	it('extracts traditional chinese verification codes', () => {
+		const code = extractCodeByPattern({
+			subject: '驗證碼通知',
+			text: '您的驗證碼為 483920，請於 10 分鐘內輸入。'
+		});
+
+		expect(code).toBe('483920');
+	});
+
+	it('normalizes digit groups separated by padded dashes', () => {
+		const code = extractCodeByPattern({
+			subject: 'Your verification code',
+			text: 'Use code 123 - 456 to continue.'
+		});
+
+		expect(code).toBe('123456');
+	});
+
+	it('does not extract tokens that are part of a url', () => {
+		const code = extractCodeByPattern({
+			subject: 'Sign-in verification',
+			text: 'Complete sign-in by opening https://example.com/verify/483920 in your browser.'
+		});
+
+		expect(code).toBe('');
+	});
+
+	it('does not extract order ids from table-layout html', () => {
+		const code = extractCodeByPattern({
+			subject: 'Your account order update',
+			html: '<table><tr><td>Order number</td><td>583921</td></tr><tr><td>Tracking</td><td>JD0012345678</td></tr></table>'
+		});
+
+		expect(code).toBe('');
+	});
+
 	it('does not extract unrelated numbers without a verification hint', () => {
 		const code = extractCodeByPattern({
 			subject: 'Your invoice is ready',

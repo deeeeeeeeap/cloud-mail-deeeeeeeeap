@@ -31,9 +31,15 @@ const emailUtils = {
 	htmlToText(content) {
 		if (!content) return ''
 		try {
-			const wrappedContent = content.includes('<body')
-				? content
-				: `<!DOCTYPE html><html><body>${content}</body></html>`;
+			// linkedom innerText only breaks on a small block-element set; table cells,
+			// rows and sectioning tags would otherwise glue adjacent text together
+			// (e.g. "code is" + "483920" -> "code is483920").
+			const separated = String(content)
+				.replace(/<\/(?:td|th)>/gi, ' $&')
+				.replace(/<\/(?:tr|table|thead|tbody|tfoot|section|header|footer|main|nav|center)>/gi, '<br>$&');
+			const wrappedContent = separated.includes('<body')
+				? separated
+				: `<!DOCTYPE html><html><body>${separated}</body></html>`;
 			const { document } = parseHTML(wrappedContent);
 			document.querySelectorAll('style, script, title').forEach(el => el.remove());
 			let text = document.body.innerText;

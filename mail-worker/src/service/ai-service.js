@@ -25,6 +25,13 @@ const STRONG_CODE_LABEL_PATTERNS = [
 	'sign[-\\s]?up\\s+code',
 	'signup\\s+code',
 	'confirm(?:ation)?\\s+code',
+	'access\\s+code',
+	'activation\\s+code',
+	'temporary\\s+code',
+	'single[-\\s]?use\\s+code',
+	'do[g\\u011f]rulama\\s+kodu',
+	'kod\\s+weryfikacyjny',
+	'\\u043a\\u043e\\u0434\\s+\\u043f\\u0456\\u0434\\u0442\\u0432\\u0435\\u0440\\u0434\\u0436\\u0435\\u043d\\u043d\\u044f',
 	'c[o\\u00f3]digo\\s+(?:de\\s+)?verificaci[o\\u00f3]n',
 	'c[o\\u00f3]digo\\s+de\\s+seguridad',
 	'c[o\\u00f3]digo\\s+de\\s+acceso',
@@ -52,6 +59,13 @@ const STRONG_CODE_LABEL_PATTERNS = [
 	'\\u767b\\u5f55\\u7801',
 	'\\u6ce8\\u518c\\u7801',
 	'\\u53e3\\u4ee4',
+	'\\u9a57\\u8b49\\u78bc',
+	'\\u6821\\u9a57\\u78bc',
+	'\\u52d5\\u614b\\u78bc',
+	'\\u5b89\\u5168\\u78bc',
+	'\\u78ba\\u8a8d\\u78bc',
+	'\\u767b\\u5165\\u78bc',
+	'\\u8a3b\\u518a\\u78bc',
 	'\\u8a8d\\u8a3c\\s*\\u30b3\\u30fc\\u30c9',
 	'\\u78ba\\u8a8d\\s*\\u30b3\\u30fc\\u30c9',
 	'\\u30bb\\u30ad\\u30e5\\u30ea\\u30c6\\u30a3\\s*\\u30b3\\u30fc\\u30c9',
@@ -82,7 +96,15 @@ const GENERIC_CODE_LABEL_PATTERNS = [
 	'\\u767b\\u5f55\\u7801',
 	'\\u6ce8\\u518c\\u7801',
 	'\\u53e3\\u4ee4',
-	'\\u5bc6\\u7801'
+	'\\u5bc6\\u7801',
+	'\\u9a57\\u8b49\\u78bc',
+	'\\u6821\\u9a57\\u78bc',
+	'\\u52d5\\u614b\\u78bc',
+	'\\u5b89\\u5168\\u78bc',
+	'\\u78ba\\u8a8d\\u78bc',
+	'\\u767b\\u5165\\u78bc',
+	'\\u8a3b\\u518a\\u78bc',
+	'\\u5bc6\\u78bc'
 ];
 const WEAK_AUTH_PATTERNS = [
 	'login',
@@ -126,6 +148,11 @@ const WEAK_AUTH_PATTERNS = [
 	'\\u8d26\\u6237',
 	'\\u5bc6\\u7801',
 	'\\u5b89\\u5168',
+	'\\u767b\\u5165',
+	'\\u8a3b\\u518a',
+	'\\u5e33\\u865f',
+	'\\u5e33\\u6236',
+	'\\u5bc6\\u78bc',
 	'\\u30ed\\u30b0\\u30a4\\u30f3',
 	'\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8',
 	'\\u30d1\\u30b9\\u30ef\\u30fc\\u30c9',
@@ -190,6 +217,11 @@ const ACTION_RE = buildRe([
 	'\\u786e\\u8ba4',
 	'\\u767b\\u5f55',
 	'\\u7ee7\\u7eed',
+	'\\u8f38\\u5165',
+	'\\u9a57\\u8b49',
+	'\\u8907\\u88fd',
+	'\\u767b\\u5165',
+	'\\u7e7c\\u7e8c',
 	'\\u5165\\u529b',
 	'\\u78ba\\u8a8d',
 	'\\uc785\\ub825',
@@ -281,7 +313,7 @@ const NEGATIVE_CONTEXT_RE = buildRe([
 ]);
 const URL_OR_EMAIL_RE = /(?:https?:\/\/|www\.)\S+|\b\S+@\S+\b/i;
 const CODE_TOKEN_RE = /(^|[^A-Za-z0-9])([A-Za-z0-9]{4,8})(?=$|[^A-Za-z0-9])/g;
-const SEPARATED_DIGIT_CODE_RE = /(^|[^A-Za-z0-9])(\d(?:[ \t-]?\d){3,7})(?=$|[^A-Za-z0-9])/g;
+const SEPARATED_DIGIT_CODE_RE = /(^|[^A-Za-z0-9])(\d(?:(?:[ \t]*[-\u2013\u2014][ \t]*|[ \t])?\d){3,7})(?=$|[^A-Za-z0-9])/g;
 
 function regexPositions(regex, text) {
 	const positions = [];
@@ -304,7 +336,12 @@ function quickHtmlText(html) {
 	if (!html) {
 		return '';
 	}
+	// Strip css/js blocks before slicing so style-heavy emails do not push the
+	// readable text outside the quick window. The raw input is pre-capped to
+	// keep the block regex cheap on huge emails.
 	return String(html)
+		.slice(0, QUICK_HTML_LIMIT * 6)
+		.replace(/<(?:style|script|title)\b[^>]*>[\s\S]*?<\/(?:style|script|title)>/gi, ' ')
 		.slice(0, QUICK_HTML_LIMIT)
 		.replace(/<[^>]*>/g, ' ')
 		.replace(/&(?:nbsp|amp|lt|gt|quot|apos|#\d+);/gi, ' ');
@@ -365,6 +402,25 @@ function lineAround(text, index) {
 	return text.slice(start, end).trim();
 }
 
+// Penalize only tokens that are part of a url or email address. Merely sharing
+// a line with one (e.g. "Hi user@example.com, your code is 483920") is normal
+// in verification emails and must not sink the real code.
+function insideUrlOrEmail(text, index) {
+	const start = Math.max(text.lastIndexOf('\n', index - 1) + 1, 0);
+	const endIndex = text.indexOf('\n', index);
+	const end = endIndex === -1 ? text.length : endIndex;
+	const line = text.slice(start, end);
+	const re = new RegExp(URL_OR_EMAIL_RE.source, 'ig');
+	let match;
+	while ((match = re.exec(line)) !== null) {
+		const matchStart = start + match.index;
+		if (index >= matchStart && index < matchStart + match[0].length) {
+			return true;
+		}
+	}
+	return false;
+}
+
 function windowAround(text, index, radius = 100) {
 	return text.slice(Math.max(0, index - radius), Math.min(text.length, index + radius));
 }
@@ -407,7 +463,7 @@ function scoreCandidate(text, candidate, hintPositions, subjectLength) {
 	const directLabelNear = DIRECT_CODE_LABEL_RE.test(context);
 	const authPurposeNear = AUTH_PURPOSE_RE.test(context);
 	const actionNear = ACTION_RE.test(context);
-	const negativeContext = NEGATIVE_CONTEXT_RE.test(line) || URL_OR_EMAIL_RE.test(line);
+	const negativeContext = NEGATIVE_CONTEXT_RE.test(line) || insideUrlOrEmail(text, candidate.index);
 	const nearestHintDistance = nearestDistance(hintPositions, candidate.index);
 	let score = 0;
 
