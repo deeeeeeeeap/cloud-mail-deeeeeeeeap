@@ -1,0 +1,36 @@
+name: Verify isolated hardening changes
+on:
+  push:
+    branches: [codex/security-reliability-20260910]
+permissions:
+  contents: write
+concurrency:
+  group: isolated-hardening-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/codex/security-reliability-20260910'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4.1.0
+        with:
+          version: 10.11.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: |
+            mail-worker/pnpm-lock.yaml
+            mail-vue/pnpm-lock.yaml
+      - name: Apply reviewed source edits (no deployment or production credentials)
+        run: node scripts/apply-hardening.mjs
+      - name: Locked dependency installation, complete tests and release build
+        run: node scripts/cloudflare-workers-git-build.mjs
+      - name: Commit verified source edits to this review branch only
+        run: |
+          git rm scripts/apply-hardening.mjs .github/workflows/hardening-verify.yml
+          git add -u
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix: connect private mail resources and enforce full release gates'
+          git push origin HEAD:refs/heads/codex/security-reliability-20260910
