@@ -20,34 +20,12 @@
 
     >
       <template #first>
-        <el-input
-            v-model="searchValue"
-            :placeholder="$t('searchByContent')"
-            class="search-input"
-            @keyup.enter="search"
-        >
-          <template #prefix>
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  @visible-change="selectOpen = $event"
-                  v-model="params.searchType"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option key="3" :label="$t('sender')" :value="'name'"/>
-                <el-option key="4" :label="$t('subject')" :value="'subject'"/>
-                <el-option key="1" :label="$t('user')" :value="'user'"/>
-                <el-option key="2" :label="$t('selectEmail')" :value="'account'"/>
-                <el-option key="5" :label="$t('searchByContent')" :value="'content'"/>
-              </el-select>
-              <div class="search-type select-trigger-label">
-                <span>{{ selectTitle }}</span>
-                <DropdownChevron :expanded="selectOpen"/>
-              </div>
-            </div>
-          </template>
-        </el-input>
+        <div class="mail-search-field">
+          <UiSelect v-model="params.searchType" class="search-kind-select" :aria-label="$t('select')"
+            :options="searchOptions" :placeholder="$t('select')"/>
+          <el-input v-model="searchValue" :placeholder="$t('searchByContent')" class="search-input"
+            @keyup.enter="search"/>
+        </div>
         <el-select v-model="params.type" placeholder="Select" class="status-select" @change="typeSelectChange">
           <el-option key="1" :label="$t('all')" value="all"/>
           <el-option key="3" :label="$t('received')" value="receive"/>
@@ -97,7 +75,7 @@
 </template>
 
 <script setup>
-import DropdownChevron from "@/components/dropdown-chevron/index.vue";
+import UiSelect from "@/components/ui-select/index.vue";
 import {starAdd, starCancel} from "@/request/star.js";
 import emailScroll from "@/components/email-scroll/index.vue"
 import {computed, defineOptions, reactive, ref, watch, onActivated, onDeactivated, onUnmounted} from "vue";
@@ -129,15 +107,9 @@ const settingStore = useSettingStore();
 const clearTime = ref('')
 const sysEmailScroll = ref({})
 const searchValue = ref('')
-const selectOpen = ref(false)
-const mySelect = ref()
 const showBathDelete = ref(false)
 const clearLoading = ref(false)
 
-const openSelect = () => {
-  mySelect.value.focus()
-  mySelect.value.toggleMenu()
-}
 
 const params = reactive({
   timeSort: 0,
@@ -176,13 +148,13 @@ function closedClear() {
   clearTime.value = null
 }
 
-const selectTitle = computed(() => {
-  if (params.searchType === 'user') return t('user')
-  if (params.searchType === 'account') return t('selectEmail')
-  if (params.searchType === 'name') return t('sender')
-  if (params.searchType === 'subject') return t('subject')
-  if (params.searchType === 'content') return t('searchByContent')
-})
+const searchOptions = computed(() => [
+  {value: 'name', label: t('sender')},
+  {value: 'subject', label: t('subject')},
+  {value: 'user', label: t('user')},
+  {value: 'account', label: t('selectEmail')},
+  {value: 'content', label: t('searchByContent')}
+])
 
 const paramsStar = localStorage.getItem('all-email-params')
 if (paramsStar) {
@@ -437,27 +409,24 @@ async function latest(signal) {
   padding-bottom: 5px;
 }
 
-.select {
-  position: absolute;
-  width: 40px;
-  opacity: 0;
-  pointer-events: none;
-}
 
-.search-type {
-  display: flex;
-  color: var(--el-text-color-regular);
-}
 
 :deep(.header-actions) {
   padding-top: 8px;
   padding-bottom: 8px;
 }
 
+.mail-search-field { display: flex; align-items: center; gap: 8px; min-width: 0; width: min(100%, 360px); }
+.mail-search-field .search-kind-select { flex: 0 0 112px; --ui-select-height: 36px; }
+.mail-search-field .search-input { flex: 1; }
+@media (pointer: coarse) {
+  .mail-search-field .search-input { height: 44px; }
+}
 .search-input {
   width: 100%;
-  max-width: 280px;
-  height: 28px;
+  max-width: none;
+  min-width: 0;
+  height: 36px;
 }
 
 .clear-email {
@@ -496,7 +465,7 @@ async function latest(signal) {
 
 :deep(.el-select__wrapper) {
   padding: 2px 10px;
-  min-height: 28px;
+  min-height: 36px;
 }
 
 @media (max-width: 767px) {

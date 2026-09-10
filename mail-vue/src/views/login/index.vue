@@ -12,30 +12,11 @@
         <span class="form-desc" v-if="show === 'login'">{{ $t('loginTitle') }}</span>
         <span class="form-desc" v-else>{{ $t('regTitle') }}</span>
         <div v-show="show === 'login'">
-          <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="form.email"
+          <el-input :class="{'mail-address-field': !hideLoginDomain}" v-model="form.email"
                     type="text" :placeholder="$t('emailAccount')" autocomplete="off">
             <template #append v-if="!hideLoginDomain">
-              <div @click.stop="openSelect">
-                <el-select
-                    v-if="show === 'login'"
-                    ref="mySelect"
-                    @visible-change="selectOpen = $event"
-                    v-model="suffix"
-                    :placeholder="$t('select')"
-                    class="select"
-                >
-                  <el-option
-                      v-for="item in domainList"
-                      :key="item"
-                      :label="item"
-                      :value="item"
-                  />
-                </el-select>
-                <div class="select-trigger-label">
-                  <span :title="suffix">{{ suffix }}</span>
-                  <DropdownChevron :expanded="selectOpen"/>
-                </div>
-              </div>
+              <UiSelect v-if="show === 'login'" v-model="suffix" :options="domainList"
+                :placeholder="$t('select')" :aria-label="$t('domain')"/>
             </template>
           </el-input>
           <el-input v-model="form.password" :placeholder="$t('password')" type="password" autocomplete="off">
@@ -48,30 +29,11 @@
           </el-button>
         </div>
         <div v-show="show !== 'login'">
-          <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="registerForm.email" type="text" :placeholder="$t('emailAccount')"
+          <el-input :class="{'mail-address-field': !hideLoginDomain}" v-model="registerForm.email" type="text" :placeholder="$t('emailAccount')"
                     autocomplete="off">
             <template #append v-if="!hideLoginDomain">
-              <div @click.stop="openSelect">
-                <el-select
-                    v-if="show !== 'login'"
-                    ref="mySelect"
-                    @visible-change="selectOpen = $event"
-                    v-model="suffix"
-                    :placeholder="$t('select')"
-                    class="select"
-                >
-                  <el-option
-                      v-for="item in domainList"
-                      :key="item"
-                      :label="item"
-                      :value="item"
-                  />
-                </el-select>
-                <div class="select-trigger-label">
-                  <span :title="suffix">{{ suffix }}</span>
-                  <DropdownChevron :expanded="selectOpen"/>
-                </div>
-              </div>
+              <UiSelect v-if="show !== 'login'" v-model="suffix" :options="domainList"
+                :placeholder="$t('select')" :aria-label="$t('domain')"/>
             </template>
           </el-input>
           <el-input v-model="registerForm.password" :placeholder="$t('password')" type="password" autocomplete="off"/>
@@ -108,29 +70,11 @@
     </div>
     <el-dialog class="bind-dialog" v-model="showBindForm"  :title="$t('bindEmailTitle')" >
       <div class="bind-container">
-        <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="bindForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
+        <el-input :class="{'mail-address-field': !hideLoginDomain}" v-model="bindForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
           <template #append v-if="!hideLoginDomain">
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="bindSelect"
-                  @visible-change="bindSelectOpen = $event"
-                  v-model="suffix"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
-              <div class="select-trigger-label">
-                <span :title="suffix">{{ suffix }}</span>
-                <DropdownChevron :expanded="bindSelectOpen"/>
-              </div>
-            </div>
-          </template>
+              <UiSelect v-model="suffix" :options="domainList"
+                :placeholder="$t('select')" :aria-label="$t('domain')"/>
+            </template>
         </el-input>
         <el-input v-if="settingStore.settings.regKey === 0" v-model="bindForm.code" :placeholder="$t('regKey')"
                   type="text" autocomplete="off"/>
@@ -148,7 +92,7 @@
 </template>
 
 <script setup>
-import DropdownChevron from "@/components/dropdown-chevron/index.vue";
+import UiSelect from "@/components/ui-select/index.vue";
 import router from "@/router";
 import {computed, nextTick, onMounted, onUnmounted, reactive, ref, watch} from "vue";
 import {login} from "@/request/login.js";
@@ -201,10 +145,6 @@ const form = reactive({
   password: '',
 
 });
-const selectOpen = ref(false)
-const mySelect = ref()
-const bindSelect = ref()
-const bindSelectOpen = ref(false)
 const suffix = ref('')
 const registerForm = reactive({
   email: '',
@@ -319,11 +259,6 @@ onUnmounted(() => {
   cancelBackgroundLoad()
 })
 
-const openSelect = () => {
-  const select = showBindForm.value ? bindSelect.value : mySelect.value
-  select?.focus()
-  select?.toggleMenu()
-}
 
 const getFullEmail = (email) => {
   return hideLoginDomain.value ? email : email + suffix.value
@@ -754,11 +689,6 @@ function submitRegister() {
     transition: box-shadow var(--transition-fast);
   }
 
-  .email-input :deep(.el-input__wrapper) {
-    border-radius: var(--radius-md) 0 0 var(--radius-md);
-    background: var(--el-bg-color);
-  }
-
   .el-input {
     height: 44px;
     width: 100%;
@@ -823,13 +753,6 @@ function submitRegister() {
   }
 }
 
-:deep(.el-input-group__append) {
-  padding: 0 !important;
-  padding-left: 8px !important;
-  padding-right: 4px !important;
-  background: var(--el-bg-color);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-}
 
 :deep(.el-button+.el-button) {
   margin: 0;
@@ -839,13 +762,6 @@ function submitRegister() {
   margin-bottom: 18px;
 }
 
-.select {
-  position: absolute;
-  right: 30px;
-  width: 100px;
-  opacity: 0;
-  pointer-events: none;
-}
 
 #login-box {
   position: relative;

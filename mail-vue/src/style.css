@@ -270,18 +270,26 @@ svg { vertical-align: middle; }
     .el-dropdown-menu__item { min-height: 44px; }
 }
 
-/* Custom input prefix/suffix selectors share the same centered disclosure layout. */
-.select-trigger-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    max-width: min(240px, 45vw);
-    vertical-align: middle;
-    cursor: pointer;
+/* The address field is two distinct controls, not a fake suffix trigger.
+   Reset Element Plus input-group negative margins/merged borders only here. */
+.mail-address-field.el-input-group { gap: 8px; --ui-select-height: 44px; }
+.mail-address-field.el-input-group > .el-input__wrapper {
+    min-width: 0; flex: 1; border-radius: 8px;
 }
-.select-trigger-label > span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.mail-address-field.el-input-group > .el-input-group__append {
+    min-width: 0; min-height: 44px; flex: 0 0 44%; max-width: 168px;
+    padding: 0 !important; background: transparent; border: 0; box-shadow: none; border-radius: 8px;
+}
+.mail-address-field.el-input-group .el-input-group__append .ui-select.el-select {
+    display: block; width: 100%; margin: 0 !important; flex: 1;
+}
+.mail-address-field.el-input-group .el-input-group__append .ui-select.el-select .el-select__wrapper {
+    min-height: 44px; border-radius: 8px; background: var(--el-bg-color);
+    box-shadow: 0 0 0 1px var(--el-border-color) inset, 0 1px 2px rgb(0 0 0 / 3%);
+}
+.mail-address-field.el-input-group .el-input-group__append .ui-select.el-select .el-select__wrapper:hover:not(.is-disabled) {
+    box-shadow: 0 0 0 1px #a1a1aa inset;
+}
+.mail-address-field.el-input-group .el-input-group__append .ui-select.el-select .el-select__wrapper.is-focused {
+    box-shadow: 0 0 0 1px #a1a1aa inset, 0 0 0 3px rgb(113 113 122 / 12%);
 }

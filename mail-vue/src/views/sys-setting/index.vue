@@ -111,7 +111,7 @@
                   </el-image>
                   <div class="background-btn">
                     <el-button class="opt-button" size="small" type="primary" plain @click="openSetBackground">{{ $t('editSetting') }}</el-button>
-                    <el-button class="opt-button" size="small" type="primary" plain @click="delBackground">{{ $t('delete') }}</el-button>
+                    <el-button class="opt-button" size="small" type="danger" plain @click="delBackground">{{ $t('delete') }}</el-button>
                   </div>
                 </div>
               </div>
@@ -354,37 +354,28 @@
 
           <div class="settings-card about">
             <div class="card-title">{{ $t('about') }}</div>
-            <div class="card-content">
-              <div class="concerning-item">
-                <span>{{ $t('version') }} :</span>
+            <div class="card-content about-content">
+              <div class="about-version">
+                <span>{{ $t('version') }}</span>
                 <el-badge is-dot :hidden="!hasUpdate">
-                  <el-button @click="jump(projectRepo + '/releases')">
-                    {{ currentVersion }}
-                    <template #icon>
-                      <Icon icon="qlementine-icons:version-control-16" style="font-size: 20px" color="#1890FF"/>
-                    </template>
-                  </el-button>
+                  <a class="version-link" :href="projectRepo + '/releases'" target="_blank" rel="noopener noreferrer">
+                    <Icon icon="qlementine-icons:version-control-16" width="16" height="16" aria-hidden="true"/>
+                    <span>{{ currentVersion }}</span>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 12 12 4M5 4h7v7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </a>
                 </el-badge>
               </div>
-              <div class="concerning-item">
-                <span>{{ $t('community') }} : </span>
-                <div class="community">
-                  <el-button @click="jump(projectRepo)">
-                    Github
-                    <template #icon>
-                      <Icon icon="codicon:github-inverted" width="22" height="22"/>
-                    </template>
-                  </el-button>
-                </div>
-              </div>
-              <div class="concerning-item">
-                <span>{{ $t('help') }} : </span>
-                <el-button @click="jump(projectDoc)">
-                  {{ t('document') }}
-                  <template #icon>
-                    <Icon color="#79D6B5" icon="fluent-color:document-32" width="18" height="18"/>
-                  </template>
-                </el-button>
+              <div class="about-links">
+                <a class="about-link about-link-github" :href="projectRepo" target="_blank" rel="noopener noreferrer">
+                  <span class="about-link-mark" aria-hidden="true"><Icon icon="codicon:github-inverted" width="24" height="24"/></span>
+                  <span class="about-link-copy"><span>{{ $t('community') }}</span><strong>GitHub</strong></span>
+                  <svg class="about-link-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 12 12 4M5 4h7v7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a class="about-link" :href="projectDoc" target="_blank" rel="noopener noreferrer">
+                  <span class="about-link-mark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6ZM14 3v6h6M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span class="about-link-copy"><span>{{ $t('help') }}</span><strong>{{ $t('document') }}</strong></span>
+                  <svg class="about-link-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 12 12 4M5 4h7v7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
               </div>
             </div>
           </div>
@@ -1524,12 +1515,6 @@ function saveTitle() {
   editSetting({title: editTitle.value})
 }
 
-function jump(href) {
-  const doc = document.createElement('a')
-  doc.href = href
-  doc.target = '_blank'
-  doc.click()
-}
 
 function editSetting(settingForm, refreshStatus = true) {
   if (settingLoading.value) return
@@ -1648,7 +1633,7 @@ function editSetting(settingForm, refreshStatus = true) {
 }
 
 .bot-verify-select {
-  margin-left: 10px;
+  margin-left: 0;
 }
 
 .settings-card {
@@ -1695,11 +1680,12 @@ function editSetting(settingForm, refreshStatus = true) {
   }
 
   > div:last-child {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
     align-items: center;
     min-width: 0;
-    justify-items: flex-end;
     font-weight: normal;
   }
 }
@@ -1862,8 +1848,7 @@ function editSetting(settingForm, refreshStatus = true) {
   }
 }
 
-// 必须压过 .setting-item > div:last-child 的两列栅格（特异度更高），
-// 否则这里的第三个子元素（删除按钮）会被自动换行挤到第二行
+// Keep credential labels truncatable while action buttons remain readable.
 .setting-item > div:last-child.bot-verify {
   display: flex;
   align-items: center;
@@ -2010,32 +1995,6 @@ function editSetting(settingForm, refreshStatus = true) {
   }
 }
 
-.concerning-item {
-  display: flex;
-  align-items: center;
-
-  .community {
-    display: flex;
-    row-gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  :deep(.el-button) {
-    padding: 0 10px;
-    font-weight: normal;
-
-    i {
-      font-size: 22px;
-    }
-  }
-
-  > span:first-child {
-    font-weight: normal;
-    padding-right: 20px;
-    white-space: nowrap;
-  }
-}
-
 .email-title {
   font-weight: normal !important;
   display: grid;
@@ -2093,4 +2052,46 @@ form .el-button {
   .background-btn { flex-shrink: 0; }
 }
 
+
+/* Quiet, separated actions; danger styles continue to come from Element Plus. */
+.settings-card .opt-button { margin: 0 !important; min-height: 34px; border-radius: 8px; padding: 8px 12px; }
+.settings-card .opt-button.el-button--primary {
+  --el-button-text-color: var(--el-text-color-primary);
+  --el-button-bg-color: var(--el-bg-color);
+  --el-button-border-color: var(--el-border-color-light);
+  --el-button-hover-text-color: var(--el-text-color-primary);
+  --el-button-hover-bg-color: var(--el-fill-color-light);
+  --el-button-hover-border-color: var(--el-border-color);
+  --el-button-active-bg-color: var(--el-fill-color);
+  --el-button-active-text-color: var(--el-text-color-primary);
+  --el-button-active-border-color: var(--el-border-color-hover);
+}
+.about-content { gap: 18px; padding: 20px; }
+.about-version { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--el-border-color-light); color: var(--el-text-color-secondary); font-size: 13px; }
+.version-link { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; min-height: 36px; box-sizing: border-box; border: 1px solid var(--el-border-color-light); border-radius: 8px; color: var(--el-text-color-regular); background: var(--el-fill-color-lighter); text-decoration: none; font-size: 12px; }
+.version-link:hover { background: var(--el-fill-color-light); }
+.about-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.about-link { position: relative; isolation: isolate; display: flex; gap: 12px; align-items: center; min-width: 0; min-height: 76px; padding: 16px; box-sizing: border-box; border: 1px solid var(--el-border-color-light); border-radius: 11px; background: var(--el-bg-color); color: var(--el-text-color-primary); text-decoration: none; transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease; }
+.about-link-github { background: #27272a; color: #fafafa; border-color: #27272a; }
+.about-link-mark { position: relative; display: grid; place-items: center; width: 24px; height: 28px; flex: 0 0 24px; isolation: isolate; }
+/* A restrained layered hover inspired by the reference, without moving the label. */
+.about-link-mark::before { content: ''; position: absolute; inset: -4px; z-index: -1; border-radius: 8px; background: currentColor; opacity: 0; transition: opacity 160ms ease, transform 160ms ease; }
+.about-link-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.about-link-copy > span { font-size: 12px; opacity: .72; line-height: 1.4; }
+.about-link-copy strong { font-size: 14px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.about-link-arrow { margin-left: auto; flex: 0 0 16px; opacity: .6; }
+.about-link:hover { background: var(--el-fill-color-lighter); border-color: var(--el-border-color-hover); }
+.about-link-github:hover { background: #3f3f46; border-color: #52525b; }
+.about-link:hover .about-link-mark::before { opacity: .1; transform: rotate(-12deg); }
+.version-link:focus-visible, .about-link:focus-visible { outline: 2px solid var(--el-text-color-secondary); outline-offset: 3px; }
+@media (max-width: 440px) {
+  .about-links { grid-template-columns: 1fr; }
+  .setting-item { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 0; }
+  .setting-item > div:last-child { justify-content: flex-start; }
+  .settings-card .opt-button, .version-link { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .about-link, .about-link-mark::before { transition: none; }
+  .about-link:hover .about-link-mark::before { transform: none; }
+}
 </style>
