@@ -45,7 +45,7 @@
             <el-alert v-if="email.status === 5" :closable="false" :title="$t('delayed')" class="email-msg" type="warning" show-icon />
           </div>
           <el-scrollbar class="htm-scrollbar" :class="email.attList.length === 0 ? 'bottom-distance' : ''">
-            <ShadowHtml class="shadow-html" :html="formatImage(email.content)" v-if="email.content" />
+            <ShadowHtml class="shadow-html" :html="email.content" :email-id="email.emailId" :scope="emailStore.contentData.delType === 'physics' ? 'all' : 'user'" v-if="email.content" />
             <pre v-else class="email-text" >{{email.text}}</pre>
           </el-scrollbar>
           <div class="att" v-if="email.attList.length > 0">
@@ -97,9 +97,7 @@ import {useAccountStore} from "@/store/account.js";
 import {formatDetailDate} from "@/utils/day.js";
 import {starAdd, starCancel} from "@/request/star.js";
 import {getExtName, formatBytes} from "@/utils/file-utils.js";
-import {toOssDomain} from "@/utils/convert.js";
 import {getIconByName} from "@/utils/icon-utils.js";
-import {useSettingStore} from "@/store/setting.js";
 import {allEmailDelete, allEmailDetail} from "@/request/all-email.js";
 import {useUiStore} from "@/store/ui.js";
 import {useI18n} from "vue-i18n";
@@ -116,12 +114,11 @@ import {
 } from "@/components/email-scroll/email-detail-view.js";
 
 const uiStore = useUiStore();
-const settingStore = useSettingStore();
 const accountStore = useAccountStore();
 const emailStore = useEmailStore();
 const router = useRouter()
 const sourceEmail = emailStore.contentData.email
-const email = reactive(createEmailDetailView(sourceEmail))
+const email = reactive(createEmailDetailView({ attList: [], recipient: '[]', ...sourceEmail }))
 const shouldMarkAsRead = emailStore.contentData.showUnread
     && email.unread === EmailUnreadEnum.UNREAD
 const showPreview = ref(false)
@@ -196,13 +193,8 @@ async function loadDetail() {
 }
 
 function toMessage(message) {
-  return  message ? JSON.parse(message).message : '';
-}
-
-function formatImage(content) {
-  content = content || '';
-  const domain = settingStore.settings.r2Domain;
-  return  content.replace(/{{domain}}/g, toOssDomain(domain) + '/');
+  if (!message) return '';
+  try { return JSON.parse(message).message || String(message); } catch { return String(message); }
 }
 
 async function showImage(att) {
@@ -294,8 +286,10 @@ function isImage(filename) {
 }
 
 function formateReceive(recipient) {
-  recipient = JSON.parse(recipient)
-  return recipient.map(item => item.address).join(', ')
+  try {
+    const list = typeof recipient === 'string' ? JSON.parse(recipient) : recipient;
+    return Array.isArray(list) ? list.map(item => item?.address || '').filter(Boolean).join(', ') : '';
+  } catch { return ''; }
 }
 
 function changeStar() {

@@ -23,7 +23,7 @@ test('the shared release command gates Worker tests, frontend tests, and the rel
   ])
 })
 
-test('deploying skips the unit tests but still checks config and builds the assets', () => {
+test('deploying cannot bypass worker or frontend tests', () => {
   const result = spawnSync(process.execPath, ['scripts/verify.mjs', '--deploy', '--dry-run'], {
     cwd: repoRoot,
     encoding: 'utf8'
@@ -33,6 +33,8 @@ test('deploying skips the unit tests but still checks config and builds the asse
   const steps = JSON.parse(result.stdout)
   assert.deepEqual(steps.map(step => step.id), [
     'release-config-tests',
+    'worker-tests',
+    'frontend-tests',
     'frontend-release-build'
   ])
 })

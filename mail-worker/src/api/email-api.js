@@ -1,4 +1,5 @@
 import app from '../hono/hono';
+import { inlineAttachmentResponse } from '../service/inline-attachment-service';
 import emailService from '../service/email-service';
 import result from '../model/result';
 import userContext from '../security/user-context';
@@ -52,3 +53,7 @@ app.put('/email/read', async (c) => {
 	return c.json(result.ok());
 })
 
+
+app.get('/email/attachment/inline', async (c) => {
+	return inlineAttachmentResponse(c, c.req.query(), userContext.getUserId(c));
+});

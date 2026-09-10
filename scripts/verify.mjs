@@ -46,12 +46,8 @@ const steps = [
   }
 ]
 
-// 部署只需要产出 dist；单元测试在 .github/workflows/ci.yml 上按 push 和 pull_request 跑，
-// 在部署路径里重跑一遍是同一 commit 测两次。配置自检留着——它校验的正是 wrangler 各入口
-// 和工作流本身，几秒钟就跑完，是唯一能挡住配置写错就上线的一步。
-const DEPLOY_STEP_IDS = new Set(['release-config-tests', 'frontend-release-build'])
-const deployOnly = process.argv.includes('--deploy')
-const selectedSteps = deployOnly ? steps.filter(step => DEPLOY_STEP_IDS.has(step.id)) : steps
+// Deploy and CI verify the same source commit. --deploy is a compatible alias, not a test bypass.
+const selectedSteps = steps
 
 if (process.argv.includes('--dry-run')) {
   process.stdout.write(`${JSON.stringify(selectedSteps.map(step => ({
@@ -63,9 +59,7 @@ if (process.argv.includes('--dry-run')) {
   process.exit(0)
 }
 
-if (deployOnly) {
-  console.log('[verify] deploy mode: skipping unit tests, they run in CI')
-}
+// Every execution, including --deploy, runs all release gates.
 
 for (const step of selectedSteps) {
   if (!existsSync(step.command)) {

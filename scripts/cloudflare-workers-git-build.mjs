@@ -37,7 +37,7 @@ function run(args) {
 
 function verifyRelease(verifyArgs) {
   console.log(verifyArgs.length
-    ? '[cloud-mail-build] Building release artifacts (unit tests run in CI).'
+    ? '[cloud-mail-build] Running full verification before building deployment artifacts.'
     : '[cloud-mail-build] Running the shared release gate.');
   const result = spawnSync(process.execPath, [verifyScript, ...verifyArgs], {
     cwd: repoRoot,

@@ -4,7 +4,7 @@ import userService from './service/user-service';
 import verifyRecordService from './service/verify-record-service';
 import emailService from './service/email-service';
 import oauthService from "./service/oauth-service";
-import attService from './service/att-service';
+// Inline attachments are served exclusively through authenticated API routes.
 import r2Service from './service/r2-service';
 import maintenanceService from './service/maintenance-service';
 import authRateLimitService from './service/auth-rate-limit-service';
@@ -42,12 +42,10 @@ export default {
 		}
 
 		if (url.pathname.startsWith('/attachments/')) {
-			const key = url.pathname.substring(1);
-			if (!await attService.isPublicInlineKey({ env }, key)) {
-				return withSecurityHeaders(new Response('Not found', { status: 404 }));
-			}
-			response = await objectResponse({ env }, key);
-			return withSecurityHeaders(response);
+			// Private mail resources must never be served by an anonymous object URL.
+			return withSecurityHeaders(new Response('Not found', {
+				status: 404, headers: { 'Cache-Control': 'private, no-store' }
+			}));
 		}
 
 		if (url.pathname.startsWith('/static/')) {

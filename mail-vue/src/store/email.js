@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { safeEmailCache, deserializeEmailCache } from '@/utils/email-cache.js'
 
 export const useEmailStore = defineStore('email', {
     state: () => ({
@@ -18,17 +19,11 @@ export const useEmailStore = defineStore('email', {
     }),
     persist: {
         pick: ['contentData'],
+        // Rewrite legacy caches after sanitizing them during hydration.
+        afterHydrate: ({ store }) => store.$persist(),
         serializer: {
-            // 正文 HTML/纯文本不落 localStorage，详情页 onMounted 会重新拉取
-            serialize: (state) => {
-                const contentData = { ...state.contentData };
-                if (contentData.email) {
-                    const { content, text, ...rest } = contentData.email;
-                    contentData.email = rest;
-                }
-                return JSON.stringify({ contentData });
-            },
-            deserialize: JSON.parse,
+            serialize: (state) => JSON.stringify(safeEmailCache(state)),
+            deserialize: deserializeEmailCache,
         },
     },
 })
