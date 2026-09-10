@@ -19,6 +19,7 @@
                 <el-select
                     v-if="show === 'login'"
                     ref="mySelect"
+                    @visible-change="selectOpen = $event"
                     v-model="suffix"
                     :placeholder="$t('select')"
                     class="select"
@@ -30,9 +31,9 @@
                       :value="item"
                   />
                 </el-select>
-                <div style="color: var(--el-text-color-primary)">
-                  <span>{{ suffix }}</span>
-                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+                <div class="select-trigger-label">
+                  <span :title="suffix">{{ suffix }}</span>
+                  <DropdownChevron :expanded="selectOpen"/>
                 </div>
               </div>
             </template>
@@ -54,6 +55,7 @@
                 <el-select
                     v-if="show !== 'login'"
                     ref="mySelect"
+                    @visible-change="selectOpen = $event"
                     v-model="suffix"
                     :placeholder="$t('select')"
                     class="select"
@@ -65,9 +67,9 @@
                       :value="item"
                   />
                 </el-select>
-                <div>
-                  <span>{{ suffix }}</span>
-                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+                <div class="select-trigger-label">
+                  <span :title="suffix">{{ suffix }}</span>
+                  <DropdownChevron :expanded="selectOpen"/>
                 </div>
               </div>
             </template>
@@ -110,7 +112,8 @@
           <template #append v-if="!hideLoginDomain">
             <div @click.stop="openSelect">
               <el-select
-                  ref="mySelect"
+                  ref="bindSelect"
+                  @visible-change="bindSelectOpen = $event"
                   v-model="suffix"
                   :placeholder="$t('select')"
                   class="select"
@@ -122,9 +125,9 @@
                     :value="item"
                 />
               </el-select>
-              <div>
-                <span>{{ suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+              <div class="select-trigger-label">
+                <span :title="suffix">{{ suffix }}</span>
+                <DropdownChevron :expanded="bindSelectOpen"/>
               </div>
             </div>
           </template>
@@ -145,6 +148,7 @@
 </template>
 
 <script setup>
+import DropdownChevron from "@/components/dropdown-chevron/index.vue";
 import router from "@/router";
 import {computed, nextTick, onMounted, onUnmounted, reactive, ref, watch} from "vue";
 import {login} from "@/request/login.js";
@@ -197,7 +201,10 @@ const form = reactive({
   password: '',
 
 });
+const selectOpen = ref(false)
 const mySelect = ref()
+const bindSelect = ref()
+const bindSelectOpen = ref(false)
 const suffix = ref('')
 const registerForm = reactive({
   email: '',
@@ -313,7 +320,9 @@ onUnmounted(() => {
 })
 
 const openSelect = () => {
-  mySelect.value.toggleMenu()
+  const select = showBindForm.value ? bindSelect.value : mySelect.value
+  select?.focus()
+  select?.toggleMenu()
 }
 
 const getFullEmail = (email) => {
@@ -789,11 +798,6 @@ function submitRegister() {
   display: grid;
   grid-template-columns: 1fr;
   gap: 15px;
-}
-
-.setting-icon {
-  position: relative;
-  top: 6px;
 }
 
 .github {

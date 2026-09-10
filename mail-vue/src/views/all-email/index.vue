@@ -30,6 +30,7 @@
             <div @click.stop="openSelect">
               <el-select
                   ref="mySelect"
+                  @visible-change="selectOpen = $event"
                   v-model="params.searchType"
                   :placeholder="$t('select')"
                   class="select"
@@ -40,9 +41,9 @@
                 <el-option key="2" :label="$t('selectEmail')" :value="'account'"/>
                 <el-option key="5" :label="$t('searchByContent')" :value="'content'"/>
               </el-select>
-              <div class="search-type">
+              <div class="search-type select-trigger-label">
                 <span>{{ selectTitle }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+                <DropdownChevron :expanded="selectOpen"/>
               </div>
             </div>
           </template>
@@ -96,6 +97,7 @@
 </template>
 
 <script setup>
+import DropdownChevron from "@/components/dropdown-chevron/index.vue";
 import {starAdd, starCancel} from "@/request/star.js";
 import emailScroll from "@/components/email-scroll/index.vue"
 import {computed, defineOptions, reactive, ref, watch, onActivated, onDeactivated, onUnmounted} from "vue";
@@ -127,11 +129,13 @@ const settingStore = useSettingStore();
 const clearTime = ref('')
 const sysEmailScroll = ref({})
 const searchValue = ref('')
+const selectOpen = ref(false)
 const mySelect = ref()
 const showBathDelete = ref(false)
 const clearLoading = ref(false)
 
 const openSelect = () => {
+  mySelect.value.focus()
   mySelect.value.toggleMenu()
 }
 
@@ -454,11 +458,6 @@ async function latest(signal) {
   width: 100%;
   max-width: 280px;
   height: 28px;
-
-  .setting-icon {
-    position: relative;
-    top: 3px;
-  }
 }
 
 .clear-email {

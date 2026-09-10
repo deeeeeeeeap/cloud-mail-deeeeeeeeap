@@ -55,7 +55,7 @@
             <span class="manual-summary-mark"><Icon icon="cloud-mail:send" width="18" height="18"/></span>
             <span class="manual-summary-label">{{ $t('manualDelivery') }}</span>
           </span>
-          <Icon class="manual-chevron" icon="lucide:chevron-down" width="18" height="18"/>
+          <DropdownChevron class="manual-chevron" :expanded="manualOpen"/>
         </button>
         <div id="manual-delivery-content" class="manual-panel-body" :class="{'is-open': manualOpen}" :inert="!manualOpen" :aria-hidden="!manualOpen">
           <div class="manual-panel-inner">
@@ -90,6 +90,7 @@
 </template>
 
 <script setup>
+import DropdownChevron from "@/components/dropdown-chevron/index.vue";
 import {computed, defineOptions, ref} from "vue";
 import {Icon} from '@iconify/vue';
 import {ElMessage, ElMessageBox} from "element-plus";
@@ -231,21 +232,19 @@ h2 { font-size: 15px; font-weight: 600; }
 .action-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--el-color-primary-light-9); color: var(--el-color-primary); flex-shrink: 0; }
 .repair-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .repair-actions .el-button { height: auto; min-height: 34px; margin: 0; padding: 8px 12px; white-space: normal; text-align: left; line-height: 1.4; }
-.manual-panel { padding: 0; overflow: hidden; transition: border-color 220ms ease, box-shadow 220ms ease; }
-.manual-panel.is-open { border-color: var(--el-color-primary-light-7); box-shadow: var(--shadow-card-hover); }
-.manual-summary { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 16px 20px; border: 0; color: var(--regular-text-color); background: transparent; cursor: pointer; text-align: left; transition: background-color 180ms ease; }
-.manual-summary:hover { background: var(--el-color-primary-light-9); }
-.manual-summary:focus-visible { outline: 2px solid var(--el-color-primary-light-5); outline-offset: -3px; }
+.manual-panel { padding: 0; overflow: hidden; }
+.manual-summary { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 16px; min-height: 68px; padding: 16px 20px; border: 0; color: var(--el-text-color-primary); background: transparent; cursor: pointer; text-align: left; transition: background-color 180ms ease; }
+.manual-summary:hover { background: var(--el-fill-color-light); }
+.manual-summary:focus-visible { outline: 2px solid var(--el-text-color-secondary); outline-offset: -3px; }
 .manual-summary-leading { display: inline-flex; align-items: center; gap: 12px; min-width: 0; }
-.manual-summary-mark { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: var(--radius-md); color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
-.manual-summary-label { font-size: 14px; font-weight: 600; }
-.manual-chevron { flex-shrink: 0; color: var(--secondary-text-color); transition: transform 280ms cubic-bezier(.22, .75, .2, 1), color 180ms ease; }
-.manual-panel.is-open .manual-chevron { color: var(--el-color-primary); transform: rotate(180deg); }
+.manual-summary-mark { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border: 1px solid var(--el-border-color-lighter); border-radius: var(--radius-md); color: var(--el-text-color-secondary); background: var(--el-fill-color-light); }
+.manual-summary-label { font-size: 14px; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
 .manual-panel-body { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 300ms cubic-bezier(.22, .75, .2, 1), opacity 180ms ease; }
 .manual-panel-body.is-open { grid-template-rows: 1fr; opacity: 1; }
 .manual-panel-inner { min-height: 0; overflow: hidden; padding: 0 20px; transition: padding 300ms cubic-bezier(.22, .75, .2, 1); }
 .manual-panel-body.is-open .manual-panel-inner { padding: 0 20px 20px; }
-.manual-panel-inner .panel-desc { max-width: 760px; margin: 0 0 14px; }
+.manual-panel-inner .panel-desc { margin: 0 0 14px; padding-top: 16px; border-top: 1px solid var(--el-border-color-lighter); }
+.manual-panel .repair-actions .el-button { min-height: 38px; padding: 9px 14px; }
 .diagnostics summary { font-size: 14px; font-weight: 500; }
 .diagnostic-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 20px; }
 .diagnostic-grid dt { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 4px; }
@@ -262,6 +261,7 @@ h2 { font-size: 15px; font-weight: 600; }
   .panel { padding: 16px; }
   .manual-panel { padding: 0; }
   .manual-summary { padding: 14px 16px; }
+  .manual-panel .repair-actions .el-button { min-height: 44px; }
   .manual-panel-inner { padding: 0 16px; }
   .manual-panel-body.is-open .manual-panel-inner { padding: 0 16px 16px; }
   .health-checks { grid-template-columns: 1fr; gap: 16px; }

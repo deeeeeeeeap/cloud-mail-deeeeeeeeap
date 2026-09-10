@@ -269,3 +269,19 @@ svg { vertical-align: middle; }
 @media (max-width: 767px) {
     .el-dropdown-menu__item { min-height: 44px; }
 }
+
+/* Custom input prefix/suffix selectors share the same centered disclosure layout. */
+.select-trigger-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: min(240px, 45vw);
+    vertical-align: middle;
+    cursor: pointer;
+}
+.select-trigger-label > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
