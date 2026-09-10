@@ -7,20 +7,31 @@
       <span class="breadcrumb-item">{{ $t(route.meta.title) }}</span>
     </div>
     <button v-perm="'email:send'" class="writer-box" type="button"
+         :class="{'writer-secondary': route.name === 'code-center'}"
+         :disabled="writerOpening" :aria-busy="writerOpening" :aria-label="$t('composeMessage')" :title="$t('composeMessage')"
          @pointerenter="preloadWriter"
          @pointerdown="preloadWriter"
          @focus="preloadWriter"
          @click="openSend">
       <Icon icon="cloud-mail:compose" width="18" height="18"/>
-      <span>{{ $t('composeMessage') }}</span>
+      <span>{{ writerOpening ? $t('ux.writerLoading') : $t('composeMessage') }}</span>
     </button>
     <div class="toolbar">
-      <button class="icon-button" type="button" :aria-label="$t('toggleTheme')" :aria-pressed="uiStore.dark" @click="openDark">
+      <button class="icon-button desktop-utility" type="button" :aria-label="$t('toggleTheme')" :aria-pressed="uiStore.dark" @click="openDark">
         <Icon :icon="uiStore.dark ? 'cloud-mail:sun' : 'cloud-mail:moon'" width="20" height="20"/>
       </button>
-      <button class="icon-button" type="button" :aria-label="$t('noticeTitle')" @click="openNotice">
+      <button class="icon-button desktop-utility" type="button" :aria-label="$t('noticeTitle')" @click="openNotice">
         <Icon icon="cloud-mail:notice" width="20" height="20"/>
       </button>
+      <el-dropdown class="mobile-utility" trigger="click" placement="bottom-end">
+        <button class="icon-button" type="button" :aria-label="$t('ux.moreActions')"><Icon icon="cloud-mail:more" width="20" height="20" /></button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item @click="openDark"><Icon :icon="uiStore.dark ? 'cloud-mail:sun' : 'cloud-mail:moon'" width="18" height="18" /> {{ $t('toggleTheme') }}</el-dropdown-item>
+            <el-dropdown-item @click="openNotice"><Icon icon="cloud-mail:notice" width="18" height="18" /> {{ $t('noticeTitle') }}</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-dropdown ref="userinfoRef" trigger="click" placement="bottom-end" @visible-change="e => userInfoShow = e" popper-class="detail-dropdown">
         <button class="avatar" type="button" :aria-label="$t('accountMenu')" :aria-expanded="userInfoShow" @keydown.esc.stop="userinfoRef.handleClose()">
           <span class="avatar-text">{{ userInitial }}</span>
@@ -83,6 +94,7 @@ const settingStore = useSettingStore();
 const userStore = useUserStore();
 const uiStore = useUiStore();
 const logoutLoading = ref(false)
+const writerOpening = ref(false)
 const userInfoShow = ref(false)
 const userinfoRef = ref(null)
 const userInitial = computed(() => (userStore.user.name || userStore.user.email || '').slice(0, 1).toUpperCase())
@@ -175,7 +187,7 @@ function openDark() {
   document.documentElement.classList.toggle('dark', nextIsDark)
   const metaTag = document.getElementById('theme-color-meta');
   const isMobile =  !window.matchMedia("(pointer: fine) and (hover: hover)").matches;
-  metaTag.setAttribute('content', nextIsDark ? (isMobile ? '#141414' : '#000000') : (isMobile ? '#FFFFFF' : '#F1F1F1'));
+  metaTag?.setAttribute('content', nextIsDark ? (isMobile ? '#141414' : '#000000') : (isMobile ? '#FFFFFF' : '#F1F1F1'));
   uiStore.dark = nextIsDark
 }
 
@@ -184,10 +196,15 @@ function preloadWriter() {
 }
 
 async function openSend() {
+  if (writerOpening.value) return
+  writerOpening.value = true
   try {
-    await uiStore.writerRef?.open?.()
-  } catch (error) {
-    console.error('Failed to open the writer', error)
+    if (!uiStore.writerRef?.open) throw new Error('Writer unavailable')
+    await uiStore.writerRef.open()
+  } catch {
+    ElMessage({message: t('ux.writerOpenFailed'), type: 'error'})
+  } finally {
+    writerOpening.value = false
   }
 }
 
@@ -255,6 +272,11 @@ async function clickLogout() {
   .logout .el-button { width: 100%; height: 36px; border-radius: var(--radius-md); }
 }
 
+
+.mobile-utility { display: none; }
+.writer-box.writer-secondary { background: var(--el-fill-color-light); color: var(--el-text-color-regular); box-shadow: none; }
+.writer-box.writer-secondary:hover { color: var(--el-bg-color); }
+.writer-box:disabled { cursor: wait; opacity: .65; }
 
 .header {
   display: flex;
@@ -348,7 +370,13 @@ async function clickLogout() {
   .writer-box { padding: 0 10px; gap: 5px; }
   .toolbar { gap: 0; .avatar { margin-left: 4px; } }
   .toolbar .setting-icon { display: none; }
-  .icon-button { width: 36px; height: 40px; }
-  .writer-box { height: 40px; }
+  .icon-button { width: 44px; height: 44px; }
+  .toolbar .avatar { min-width: 44px; min-height: 44px; margin-left: 0; justify-content: center; }
+  .desktop-utility { display: none; }
+  .mobile-utility { display: inline-flex; }
+  .writer-box { width: 44px; height: 44px; padding: 0; }
+  .writer-box span { display: none; }
+  .user-details { width: min(320px, calc(100vw - 24px)); padding: 16px; }
+  .user-details .detail-email, .user-details .logout .el-button { min-height: 44px; }
 }
 </style>

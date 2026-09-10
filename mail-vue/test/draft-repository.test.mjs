@@ -313,3 +313,13 @@ test('clearing all drafts rolls back when the attachment table cannot be cleared
   assert.equal(db.state.draft.size, 1)
   assert.equal(db.state.att.size, 1)
 })
+
+
+test('a message containing only attachments is saved and can be reopened intact', async () => {
+  const db = createMemoryDraftDb()
+  const attachments = [{filename: 'important.pdf', content: 'test-only', size: 9}]
+  const id = await saveDraft(db, {subject: '', content: '', receiveEmail: [], attachments})
+  assert.notEqual(id, null)
+  const draft = await getDraftForEditing(db, id)
+  assert.deepEqual(draft.attachments, attachments)
+})

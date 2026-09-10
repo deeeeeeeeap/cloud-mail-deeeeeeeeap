@@ -10,11 +10,11 @@
           <span class="sender-name">{{ form.name }}</span>
           <span class="send-email"><{{ form.sendEmail }}></span>
         </div>
-        <button type="button" class="close-writer" :aria-label="$t('closeWindow')" @click="close">
+        <button type="button" :disabled="sending || savingDraft" class="close-writer" :aria-label="$t('closeWindow')" @click="close">
           <Icon icon="material-symbols-light:close-rounded" width="22" height="22"/>
         </button>
       </div>
-      <div class="container">
+      <div class="container" :inert="sending || savingDraft">
         <el-input-tag  @add-tag="addTagChange" tag-type="primary" @input="inputChange" size="default" v-model="form.receiveEmail" >
           <template #prefix>
             <div class="item-title" >{{ $t('recipient') }}</div>
@@ -65,13 +65,26 @@
             </div>
           </div>
           <div>
-            <el-button type="primary" @click="sendEmail" v-if="form.sendType === 'reply'">{{ $t('reply') }}</el-button>
-            <el-button type="primary" @click="sendEmail" v-else-if="form.sendType === 'forward'">{{ $t('forward') }}</el-button>
-            <el-button type="primary" @click="sendEmail" v-else>{{ $t('send') }}</el-button>
+            <el-button type="primary" :loading="sending" @click="sendEmail" v-if="form.sendType === 'reply'">{{ $t('reply') }}</el-button>
+            <el-button type="primary" :loading="sending" @click="sendEmail" v-else-if="form.sendType === 'forward'">{{ $t('forward') }}</el-button>
+            <el-button type="primary" :loading="sending" @click="sendEmail" v-else>{{ $t('send') }}</el-button>
           </div>
         </div>
       </div>
     </div>
+    <el-dialog v-model="showCloseDialog" append-to-body align-center width="min(480px, calc(100vw - 32px))"
+      :title="t('ux.draftCloseTitle')" :close-on-click-modal="false" :close-on-press-escape="!savingDraft"
+      :show-close="!savingDraft" @open-auto-focus="focusKeepEditing" @opened="focusKeepEditing" @closed="restoreEditorFocus">
+      <p>{{ t('ux.draftCloseHint') }}</p>
+      <p v-if="draftSaveError" class="draft-save-error" role="alert">{{ t('ux.draftSaveFailed') }}</p>
+      <template #footer>
+        <div class="draft-close-actions">
+          <el-button type="danger" plain :disabled="savingDraft" @click="resolveClose('discard')">{{ t('ux.draftDiscard') }}</el-button>
+          <el-button ref="keepEditingButton" :disabled="savingDraft" @click="resolveClose('continue')">{{ t('ux.draftKeepEditing') }}</el-button>
+          <el-button type="primary" :loading="savingDraft" @click="resolveClose('save')">{{ t('ux.draftSaveClose') }}</el-button>
+        </div>
+      </template>
+    </el-dialog>
     <el-dialog top="10vh" v-model="showContacts" @closed="clearSelectContact" :title="t('recentContacts')">
       <el-table ref="contactsTabRef" row-key="email" :data="contacts" style="height: 445px">
         <el-table-column type="selection" width="32" />
@@ -118,7 +131,8 @@ import {useI18n} from "vue-i18n";
 import {ElMessageBox} from "element-plus";
 import {getSendLimitViolation, SEND_LIMITS} from "@/layout/write/send-limits.js";
 import {saveDraft} from "@/db/draft-repository.js";
-import {registerSessionResetter} from '@/session/auth-session.js'
+import {registerSessionResetter, getSessionGeneration} from '@/session/auth-session.js'
+import {hasDraftContent, settleDraftClose} from '@/layout/write/close-state.js'
 import {stageProgrammaticWriterContent} from '@/layout/write/content-state.js'
 
 defineExpose({
@@ -139,7 +153,12 @@ const userStore = useUserStore();
 const show = ref(false);
 const percent = ref(0)
 let percentMessage = null
-let sending = false
+const sending = ref(false)
+const showCloseDialog = ref(false)
+const savingDraft = ref(false)
+const draftSaveError = ref(false)
+const keepEditingButton = ref(null)
+let writerEpoch = 0
 const defValue = ref('')
 const contactsTabRef = ref({})
 const showContacts = ref(false)
@@ -172,6 +191,7 @@ function flushEditorContent() {
 const unregisterSessionResetter = registerSessionResetter(() => {
   editor.value?.cancelContentSync?.()
   show.value = false
+  sending.value = false
   resetForm()
 })
 
@@ -334,7 +354,8 @@ function chooseFile() {
   const doc = document.createElement("input")
   doc.setAttribute("type", "file")
   doc.multiple = true;
-  doc.click()
+  const selectionEpoch = writerEpoch
+  const selectionSession = getSessionGeneration()
   doc.onchange = async (e) => {
 
     const fileList = e.target.files;
@@ -353,11 +374,13 @@ function chooseFile() {
       }
 
       const content = await fileToBase64(file)
+      if (selectionEpoch !== writerEpoch || selectionSession !== getSessionGeneration()) return
       form.attachments.push({content, filename, size, contentType})
 
     }
 
   }
+  doc.click()
 }
 
 async function sendEmail() {
@@ -415,7 +438,7 @@ async function sendEmail() {
     return
   }
 
-  if (sending) {
+  if (sending.value) {
     ElMessage({
       message: t('sendingErrorMsg'),
       type: 'error',
@@ -432,13 +455,18 @@ async function sendEmail() {
     customClass: 'message-bottom'
   })
 
-  sending = true
+  const sendSession = getSessionGeneration()
+  const sendEpoch = writerEpoch
+  const isCurrentSend = () => sendSession === getSessionGeneration() && sendEpoch === writerEpoch
+  const currentProgress = percentMessage
+  sending.value = true
 
-  show.value = false
+  // Keep the editor visible but inert until the request resolves; no fake completion.
 
   emailSend(form, (e) => {
-    percent.value = Math.round((e.loaded * 98) / e.total)
+    if (isCurrentSend() && e.total > 0) percent.value = Math.round((e.loaded * 98) / e.total)
   }).then(emailList => {
+    if (!isCurrentSend()) return
     const email = emailList[0]
     emailList.forEach(item => {
       emailStore.sendScroll?.addItem(item)
@@ -465,6 +493,7 @@ async function sendEmail() {
     show.value = false
     resetForm();
   }).catch((e) => {
+    if (!isCurrentSend()) return
     ElNotification({
       title: t('sendFailMsg'),
       type: e.code === 403 ? 'warning' : 'error',
@@ -474,9 +503,11 @@ async function sendEmail() {
     show.value = true
     addRecipientRecord();
   }).finally(() => {
-    percentMessage.close()
-    percent.value = 0
-    sending = false
+    currentProgress?.close()
+    if (sendSession === getSessionGeneration()) {
+      percent.value = 0
+      sending.value = false
+    }
   })
 }
 
@@ -490,6 +521,10 @@ function addRecipientRecord() {
 }
 
 function resetForm() {
+  writerEpoch++
+  showCloseDialog.value = false
+  savingDraft.value = false
+  draftSaveError.value = false
   editor.value?.cancelContentSync?.()
   form.receiveEmail = []
   form.subject = ''
@@ -517,6 +552,7 @@ function focusChange() {
 }
 
 function openForward(email) {
+  if (sending.value || savingDraft.value) return
   resetForm();
 
   email.subject = email.subject || ''
@@ -546,6 +582,7 @@ function openForward(email) {
 }
 
 function openReply(email) {
+  if (sending.value || savingDraft.value) return
 
   resetForm();
 
@@ -598,6 +635,7 @@ function formatImage(content) {
 }
 
 function open() {
+  if (sending.value || savingDraft.value) return
   if (!accountStore.currentAccount.email) {
     form.sendEmail = userStore.user.email;
     form.accountId = userStore.user.account.accountId;
@@ -612,6 +650,7 @@ function open() {
 }
 
 function openDraft(draft) {
+  if (sending.value || savingDraft.value) return
   editor.value?.cancelContentSync?.()
   Object.assign(form, {...draft})
   defValue.value = ''
@@ -621,7 +660,8 @@ function openDraft(draft) {
 }
 
 const handleKeyDown = (event) => {
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && show.value && !showCloseDialog.value && !showContacts.value
+      && !event.defaultPrevented && !document.querySelector('.tox-dialog')) {
     close()
   }
 };
@@ -637,69 +677,75 @@ onUnmounted(() => {
 });
 
 function close() {
-
+  if (!show.value || sending.value || savingDraft.value || showCloseDialog.value) return
   flushEditorContent()
-
-  if (selectStatus) openSelect();
-
-  if (form.draftId) {
-    draftStore.setDraft = {...toRaw(form)}
+  if (selectStatus) openSelect()
+  if (!hasDraftContent(form) && form.draftId == null) {
     show.value = false
     resetForm()
-    return;
+    return
   }
+  draftSaveError.value = false
+  showCloseDialog.value = true
+}
 
-  if (!(form.content || form.subject || form.receiveEmail.length > 0)) {
-    show.value = false
-    resetForm()
-    return;
+function focusKeepEditing() {
+  nextTick(() => keepEditingButton.value?.$el?.focus())
+}
+
+function restoreEditorFocus() {
+  if (show.value) editor.value?.focus?.()
+}
+
+async function resolveClose(action) {
+  if (savingDraft.value) return
+  if (action === 'continue') {
+    showCloseDialog.value = false
+    return
   }
-
-  if (backReply.sendType === 'reply' || backReply.sendType === 'forward') {
-    let subjectFlag = form.subject === backReply.subject
-    let contentFlag = (editor.value?.getContent?.() || '') === backReply.content
-    let receiveFlag = form.receiveEmail.length === 1 && form.receiveEmail[0] === backReply.receiveEmail[0]
-    if (backReply.sendType === 'forward' && form.receiveEmail.length === 0) {
-      receiveFlag = true;
-    }
-    if (subjectFlag && contentFlag && receiveFlag) {
-      resetForm();
-      close()
-      return;
-    }
-  }
-
-  ElMessageBox.confirm(t('saveDraftConfirm'), {
-    confirmButtonText: t('confirm'),
-    cancelButtonText: t('cancel'),
-    type: 'warning',
-    distinguishCancelAndClose: true
-  }).then(async () => {
-    const formData = {
-      ...toRaw(form),
-      receiveEmail: [...form.receiveEmail],
-      attachments: form.attachments.map(item => ({...toRaw(item)}))
-    };
-    formData.createTime = dayjs().utc().format('YYYY-MM-DD HH:mm:ss');
-    const database = await waitForDraftDatabase()
-    if (!database) throw new Error('Draft database is unavailable')
-    await saveDraft(database, formData)
-    draftStore.refreshList++
-    show.value = false
-    await nextTick(() => {
-      resetForm()
+  const generation = getSessionGeneration()
+  const epoch = writerEpoch
+  const isCurrent = () => generation === getSessionGeneration() && epoch === writerEpoch
+  savingDraft.value = action === 'save'
+  draftSaveError.value = false
+  try {
+    await settleDraftClose(action, {
+      isCurrent,
+      discard: () => { show.value = false; resetForm() },
+      save: async () => {
+        flushEditorContent()
+        const formData = {
+          ...toRaw(form),
+          receiveEmail: [...form.receiveEmail],
+          attachments: form.attachments.map(item => ({...toRaw(item)})),
+          createTime: dayjs().utc().format('YYYY-MM-DD HH:mm:ss')
+        }
+        const database = await waitForDraftDatabase()
+        if (!isCurrent()) return
+        if (!database) throw new Error('Draft database is unavailable')
+        await saveDraft(database, formData)
+        if (isCurrent()) {
+          draftStore.refreshList++
+          ElMessage({message: t('ux.draftSavedLocal'), type: 'success'})
+        }
+      }
     })
-  }).catch((action) => {
-    if (action === 'cancel') {
-      show.value = false
-      resetForm()
-    }
-  })
-
+  } catch {
+    if (isCurrent()) draftSaveError.value = true
+  } finally {
+    if (isCurrent()) savingDraft.value = false
+  }
 }
 
 </script>
 <style>
+.draft-save-error { color: var(--el-color-danger); margin-top: 12px; }
+.draft-close-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.draft-close-actions .el-button { margin: 0; min-height: 40px; }
+@media (max-width: 767px) {
+  .draft-close-actions { flex-direction: column-reverse; }
+  .draft-close-actions .el-button { width: 100%; min-height: 44px; }
+}
 .write-select .el-select-dropdown__list {
   padding: 4px 4px !important;
 }
@@ -713,6 +759,7 @@ function close() {
 </style>
 <style scoped lang="scss">
 .send {
+  z-index: 110;
   position: fixed;
   top: 0;
   left: 0;
@@ -735,7 +782,8 @@ function close() {
     overflow: hidden;
     @media (max-width: 1024px) {
       width: 100%;
-      height: 100%;
+      height: 100dvh;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
       border-radius: 0;
       border: 0;
       padding: 16px;
@@ -786,6 +834,7 @@ function close() {
     }
 
     .container {
+      min-height: 0;
       height: 100%;
       display: grid;
       grid-template-rows: auto auto 1fr auto;

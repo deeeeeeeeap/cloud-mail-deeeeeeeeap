@@ -23,7 +23,7 @@ const AccountPanel = defineAsyncComponent(() => import('@/layout/account/index.v
 const settingStore = useSettingStore()
 const uiStore = useUiStore();
 const route = useRoute()
-let  innerWidth =  window.innerWidth
+let accountPanelDesktop = window.innerWidth > 767
 
 let elNotification = null
 const noticeStyleId = 'cloud-mail-notice-style'
@@ -37,6 +37,7 @@ const hasAccountQueryPerm = computed(() => hasPerm('account:query'))
 
 const shouldShowAccountPanel = computed(() => {
   return accountShow.value && hasAccountQueryPerm.value
+      && ['email', 'send', 'content'].includes(route.name)
 })
 
 watch(shouldShowAccountPanel, (show) => {
@@ -124,12 +125,10 @@ onBeforeUnmount(() => {
 })
 
 const handleResize = () => {
-  if (['content','email','send'].includes(route.meta.name)) {
-    if (innerWidth !==  window.innerWidth) {
-      innerWidth = window.innerWidth;
-      uiStore.accountShow = window.innerWidth > 767;
-    }
-  }
+  const desktop = window.innerWidth > 767
+  if (desktop === accountPanelDesktop) return
+  accountPanelDesktop = desktop
+  if (['content', 'email', 'send'].includes(route.name)) uiStore.accountShow = desktop
 }
 
 </script>

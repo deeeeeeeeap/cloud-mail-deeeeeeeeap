@@ -32,6 +32,7 @@ import { ref, onMounted, onBeforeUnmount, nextTick, shallowRef } from 'vue'
 import {useUiStore} from "@/store/ui.js";
 import {createWriterIntentLoader} from '@/layout/writer-intent-loader.js'
 import {getSessionGeneration} from '@/session/auth-session.js'
+import {createBreakpointTransition} from '@/layout/responsive-navigation.js'
 
 const uiStore = useUiStore();
 const WriterComponent = shallowRef(null)
@@ -59,10 +60,11 @@ const writerApi = {
   openDraft: (...args) => callWriter('openDraft', ...args)
 }
 
-const handleResize = () => {
-  isMobile.value = window.innerWidth < 1025
-  uiStore.asideShow = window.innerWidth > 1024;
-}
+const applyLayoutMode = createBreakpointTransition(mobile => {
+  isMobile.value = mobile
+  uiStore.asideShow = !mobile
+})
+const handleResize = () => applyLayoutMode(window.innerWidth)
 
 async function loadWriter() {
   if (!WriterComponent.value) {

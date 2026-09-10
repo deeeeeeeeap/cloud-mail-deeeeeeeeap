@@ -1,7 +1,11 @@
 <template>
   <div class="editor-box" :class="showLoading ? 'editor-box-loading' : ''">
     <loading class="loading" v-if="showLoading"/>
-    <textarea v-else style="outline: none" :id="editorId" ref="editorRef"></textarea>
+    <div v-if="loadFailed" class="editor-error" role="alert">
+      <p>{{ t('ux.editorFailed') }}</p>
+      <el-button @click="initTinyMCE">{{ t('ux.editorRetry') }}</el-button>
+    </div>
+    <textarea v-if="!showLoading && !loadFailed" style="outline: none" :id="editorId" ref="editorRef"></textarea>
   </div>
 </template>
 
@@ -41,12 +45,13 @@ const props = defineProps({
 });
 
 
-const {locale} = useI18n()
+const {locale, t} = useI18n()
 const emit = defineEmits(['change','focus']);
 const editor = shallowRef(null);
 const isInitialized = ref(false);
 const editorRef = ref(null);
 const showLoading = ref(false);
+const loadFailed = ref(false);
 const uiStore = useUiStore();
 const settingStore = useSettingStore();
 let initToken = 0;
@@ -59,12 +64,7 @@ const contentSync = createEditorContentSync({
   publish: ({content, text}) => emit('change', content, text),
   onError: error => console.warn('TinyMCE 内容同步失败', error)
 })
-const initTask = createRetryableInitTask(() => initializeTinyMCE()
-  .catch(error => {
-    showLoading.value = false;
-    console.warn('TinyMCE 初始化失败', error);
-    return null;
-  }))
+const initTask = createRetryableInitTask(initializeTinyMCE)
 
 onMounted(() => {
   initTinyMCE();
@@ -115,23 +115,24 @@ function initTinyMCE() {
 
 async function initializeTinyMCE() {
   const token = ++initToken;
+  loadFailed.value = false;
   showLoading.value = !window.tinymce;
-
   try {
     await loadTinyMCE();
-  } catch (e) {
+    if (token !== initToken) return;
     showLoading.value = false;
-    console.warn('TinyMCE 加载失败', e);
-    return;
+    await nextTick();
+    if (token !== initToken) return;
+    await initEditor();
+  } catch (error) {
+    if (token !== initToken) return;
+    // Preserve staged/edited content for a retry; never replace it with an empty editor.
+    if (isInitialized.value) preservedContent = editor.value?.getContent?.() ?? preservedContent;
+    destroyEditor();
+    showLoading.value = false;
+    loadFailed.value = true;
+    console.warn('TinyMCE initialization failed', error);
   }
-
-  if (token !== initToken) return;
-
-  showLoading.value = false;
-  await nextTick();
-
-  if (token !== initToken) return;
-  initEditor();
 }
 
 function initEditor() {
@@ -139,7 +140,7 @@ function initEditor() {
     return;
   }
 
-  window.tinymce.init({
+  return window.tinymce.init({
     selector: `#${props.editorId}`,
     statusbar: false,
     height: "100%",
@@ -257,7 +258,10 @@ function destroyEditor() {
 </script>
 
 <style lang="scss" scoped>
+.editor-error { padding: 24px; text-align: center; color: var(--el-text-color-regular); }
+.editor-error p { margin-bottom: 12px; }
 .editor-box {
+  min-height: 0;
   height: 100%;
   width: 100%;
 }
