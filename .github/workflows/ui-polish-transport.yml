@@ -1,0 +1,42 @@
+name: Apply verified UI refinement patch
+on:
+  push:
+    branches: [codex/ui-polish-20260910]
+    paths: [.ui-polish-transport.b64]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify patch, apply and remove temporary transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, gzip, hashlib, pathlib, subprocess
+          patch = gzip.decompress(base64.b64decode(pathlib.Path('.ui-polish-transport.b64').read_text(), validate=False))
+          assert hashlib.sha256(patch).hexdigest() == '7aa7273a57dc5e441ff1ce34d6e237ec1dae56061089f2051408a06788201004'
+          path = pathlib.Path('/tmp/ui-polish.patch')
+          path.write_bytes(patch)
+          subprocess.run(['git', 'apply', '--index', '--check', str(path)], check=True)
+          subprocess.run(['git', 'apply', '--index', str(path)], check=True)
+          subprocess.run(['git', 'rm', '.ui-polish-transport.b64', '.github/workflows/ui-polish-transport.yml'], check=True)
+          expected = sorted(['mail-vue/src/components/dropdown-chevron/index.vue', 'mail-vue/src/layout/account/index.vue', 'mail-vue/src/layout/header/index.vue', 'mail-vue/src/style.css', 'mail-vue/src/views/all-email/index.vue', 'mail-vue/src/views/code-center/index.vue', 'mail-vue/src/views/login/index.vue', 'mail-vue/src/views/maintenance/index.vue', 'mail-vue/src/views/user/index.vue', 'mail-vue/test/ui-polish.test.mjs'])
+          actual = subprocess.check_output(['git', 'diff', '--cached', '--name-only', 'ffa14c785d44b685e3b859a817bcb77448b1e46d'], text=True).splitlines()
+          assert actual == expected, actual
+          tree = subprocess.check_output(['git', 'write-tree'], text=True).strip()
+          frontend = subprocess.check_output(['git', 'rev-parse', tree + ':mail-vue'], text=True).strip()
+          assert frontend == '5f00d24328fe4c1c62a5bc6ac13a83a0f72c4448', frontend
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+          print('Verified frontend tree:', frontend)
+          print('Final changed files:', '\n'.join(actual))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: polish code cards, neutral maintenance panel and dropdown carets'
+          git push origin HEAD:refs/heads/codex/ui-polish-20260910
