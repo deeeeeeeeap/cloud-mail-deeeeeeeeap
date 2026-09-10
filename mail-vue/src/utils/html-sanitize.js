@@ -83,5 +83,15 @@ export function sanitizeHtml(html = '') {
     }
   };
   clean(template.content);
-  return template.innerHTML;
+  return serializeHtmlFragment(template.content);
+}
+
+// Serialize the cleaned fragment itself rather than relying on a DOM shim's
+// template.innerHTML cache. No content is inserted into an active document.
+export function serializeHtmlFragment(fragment) {
+  return Array.from(fragment.childNodes).map(node => {
+    if (node.nodeType === 1) return node.outerHTML;
+    if (node.nodeType === 3) return node.textContent.replace(/[&<>]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[char]));
+    return '';
+  }).join('');
 }

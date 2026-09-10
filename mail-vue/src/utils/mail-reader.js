@@ -1,4 +1,4 @@
-import { isSafeImageData, sanitizeHtml } from './html-sanitize.js';
+import { isSafeImageData, sanitizeHtml, serializeHtmlFragment } from './html-sanitize.js';
 
 export function inlineAttachmentKey(source) {
   const input = String(source || '').trim().replace(/^\{\{domain\}\}/, '/');
@@ -31,7 +31,7 @@ export function prepareMailBody(html, { remoteImages = false, inlineUrls = new M
       if (remoteImages) img.setAttribute('src', source);
     }
   }
-  return { html: template.innerHTML, inlineKeys: [...inlineKeys], remoteCount };
+  return { html: serializeHtmlFragment(template.content), inlineKeys: [...inlineKeys], remoteCount };
 }
 
 export function mailDocument(body, remoteImages = false) {

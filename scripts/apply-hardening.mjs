@@ -55,3 +55,31 @@ replace('scripts/cloudflare-workers-git-build.mjs', "'[cloud-mail-build] Buildin
 replace('scripts/verify-release.test.mjs', "test('deploying skips the unit tests but still checks config and builds the assets'", "test('deploying cannot bypass worker or frontend tests'");
 replace('scripts/verify-release.test.mjs', "    'release-config-tests',\n    'frontend-release-build'", "    'release-config-tests',\n    'worker-tests',\n    'frontend-tests',\n    'frontend-release-build'");
 console.log('Applied reviewed mail-reader, attachment, cache and release-gate changes.');
+
+// Retire unused public-inline authorization and public image-domain formatting.
+transform('mail-worker/src/service/att-service.js', text => {
+  const start = text.indexOf('\tasync isPublicInlineKey(c, key) {');
+  const end = text.indexOf('\tasync reconcileReceived(c, emailId) {', start);
+  if (start < 0 || end < 0) throw new Error('Public-inline method baseline changed');
+  return text.slice(0, start) + text.slice(end);
+});
+for (const line of ['import {toOssDomain} from "@/utils/convert.js";\n', 'import {useSettingStore} from "@/store/setting.js";\n', 'const settingStore = useSettingStore();\n']) {
+  replace(view, line, '');
+}
+transform(view, text => {
+  const start = text.indexOf('function formatImage(content) {');
+  const end = text.indexOf('async function showImage(att)', start);
+  if (start < 0 || end < 0) throw new Error('Public image formatter baseline changed');
+  return text.slice(0, start) + text.slice(end);
+});
+transform('mail-worker/test/attachment-access.spec.js', text => {
+  const before = "\t\t\texpect(recorder.calls[0].bindings).toEqual([\n\t\t\t\t'attachments/private.txt',\n\t\t\t\tattConst.type.EMBED,\n\t\t\t\tattConst.status.READY,\n\t\t\t\temailConst.status.SAVING,\n\t\t\t\temailConst.status.FAILED\n\t\t\t]);";
+  if (text.split(before).length !== 3) throw new Error('Anonymous attachment tests baseline changed');
+  return text.split(before).join('\t\texpect(recorder.calls).toEqual([]);\n\t\texpect(r2Service.getObj).not.toHaveBeenCalled();');
+});
+replace('mail-worker/test/attachment-access.spec.js',
+  "it('serves D1-authorized inline attachments from both anonymous routes'",
+  "it('denies ready inline attachments from both anonymous routes without touching storage'");
+replace('mail-worker/test/attachment-access.spec.js',
+  "\t\texpect(directResponse.status).toBe(200);\n\t\texpect(await directResponse.text()).toBe('inline');\n\t\texpect(apiResponse.status).toBe(200);\n\t\texpect(await apiResponse.text()).toBe('inline');\n\t\texpect(r2Service.getObj).toHaveBeenCalledTimes(2);",
+  "\t\texpect(directResponse.status).toBe(404);\n\t\texpect(apiResponse.status).toBe(404);\n\t\texpect(directResponse.headers.get('Cache-Control')).toContain('no-store');\n\t\texpect(apiResponse.headers.get('Cache-Control')).toContain('no-store');\n\t\texpect(r2Service.getObj).not.toHaveBeenCalled();\n\t\texpect(recorder.calls).toEqual([]);");
