@@ -22,6 +22,7 @@ function setup(request) {
     removeEventListener: event => listeners.delete(event)
   }
   const adapters = {
+    createVisiblePoller: () => ({start() {}, stop() {}, dispose() {}}), AbortController,
     computed, reactive, ref, watch, defineOptions() {}, onBeforeUnmount(fn) {unmount = fn},
     useI18n: () => ({t: (key, values) => values ? `${key}:${values.minutes}` : key}),
     useEmailStore: () => ({}), hasPerm: () => true, ElMessage() {},
@@ -32,7 +33,7 @@ function setup(request) {
     clearTimeout: id => timers.delete(id)
   }
   const state = new Function(...Object.keys(adapters), `${source}
-    return {refresh, loadMore, copyCode, codes, scope, params, first, loading, loadingMore, hasMore, displayCode, codeStatusText};`
+    return {refresh, loadMore, copyCode, codes, scope, params, first, loading, loadingMore, hasMore, displayCode, codeStatusText, waiting, pollForCodes, newCodeCount, backgroundFailed};`
   )(...Object.values(adapters))
   return {...state, clipboard, timers, listeners, document,
     unmount: () => unmount(),
@@ -95,19 +96,19 @@ test('scope changes clear the old list and ignore responses from the previous sc
   assert.equal(state.loading.value, false)
 })
 
-test('display countdown updates locally and expired values cannot be copied even before a delayed timer runs', async () => {
+test('display-window hiding updates locally and expired values cannot be copied even before a delayed timer runs', async () => {
   const state = setup(async () => ({list: [row(3)], hasMore: false}))
   await settle()
-  assert.equal(state.codeStatusText(state.codes[0]), 'codeExpiresIn:2')
+  assert.equal(state.codeStatusText(state.codes[0]), 'ux.codeRecent')
   state.advance(30000)
-  assert.equal(state.codeStatusText(state.codes[0]), 'codeExpiresIn:1')
+  assert.equal(state.codeStatusText(state.codes[0]), 'ux.codeRecent')
   await state.copyCode(state.codes[0])
   assert.deepEqual(state.clipboard, ['483920'])
   state.advance(60000, false)
   await state.copyCode(state.codes[0])
   assert.deepEqual(state.clipboard, ['483920'])
   assert.equal(state.codes[0].code, '')
-  assert.equal(state.displayCode(state.codes[0]), 'codeExpiredHidden')
+  assert.equal(state.displayCode(state.codes[0]), 'ux.codeHiddenValue')
   state.unmount()
   assert.equal(state.timers.size, 0)
   assert.equal(state.listeners.size, 0)
@@ -141,4 +142,49 @@ test('duplicate pending refreshes are ignored and unmounted requests cannot upda
   await settle()
   assert.equal(state.codes.length, 0)
   assert.equal(state.timers.size, 0)
+})
+
+
+test('background checks announce new IDs without reordering cards or using unsubmitted search text', async () => {
+  const calls = []
+  let latest = 3
+  const state = setup(async (scope, params) => {
+    calls.push({scope, params})
+    return {list: [row(latest)], hasMore: true}
+  })
+  await settle()
+  latest = 4
+  state.params.query = 'half typed'
+  await state.pollForCodes(new AbortController().signal)
+  assert.equal(calls.at(-1).params.query, '')
+  assert.equal(state.newCodeCount.value, 1)
+  assert.deepEqual(state.codes.map(item => item.emailId), [3])
+  state.unmount()
+})
+
+test('a stopped background request cannot publish new-code counts', async () => {
+  let resolve
+  let calls = 0
+  const state = setup(async () => ++calls === 1 ? {list: [row(3)]} : new Promise(done => {resolve = done}))
+  await settle()
+  const controller = new AbortController()
+  const task = state.pollForCodes(controller.signal)
+  controller.abort()
+  resolve({list: [row(4)]})
+  await task
+  assert.equal(state.newCodeCount.value, 0)
+  state.unmount()
+})
+
+test('background failures preserve cards and show retry state instead of success', async () => {
+  let calls = 0
+  const state = setup(async () => {
+    if (++calls > 1) throw new Error('offline')
+    return {list: [row(3)]}
+  })
+  await settle()
+  assert.equal(await state.pollForCodes(new AbortController().signal), false)
+  assert.equal(state.backgroundFailed.value, true)
+  assert.equal(state.codes[0].emailId, 3)
+  state.unmount()
 })

@@ -5,7 +5,7 @@ export async function saveDraft(database, draftInput) {
     ...draft
   } = draftInput
 
-  const meaningful = Boolean(draft.content || draft.subject)
+  const meaningful = Boolean(draft.content || draft.subject || attachments.length)
     || (Array.isArray(draft.receiveEmail) && draft.receiveEmail.length > 0)
   if (!meaningful) {
     if (draftId !== null && draftId !== undefined) {
