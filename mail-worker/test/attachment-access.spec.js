@@ -196,13 +196,8 @@ describe('attachment access control', () => {
 		await waitOnExecutionContext(ctx);
 
 		expect(response.status).toBe(404);
-			expect(recorder.calls[0].bindings).toEqual([
-				'attachments/private.txt',
-				attConst.type.EMBED,
-				attConst.status.READY,
-				emailConst.status.SAVING,
-				emailConst.status.FAILED
-			]);
+		expect(recorder.calls).toEqual([]);
+		expect(r2Service.getObj).not.toHaveBeenCalled();
 	});
 
 	it('blocks registered normal attachment direct links from /api/oss', async () => {
@@ -220,16 +215,11 @@ describe('attachment access control', () => {
 		await waitOnExecutionContext(ctx);
 
 		expect(response.status).toBe(404);
-			expect(recorder.calls[0].bindings).toEqual([
-				'attachments/private.txt',
-				attConst.type.EMBED,
-				attConst.status.READY,
-				emailConst.status.SAVING,
-				emailConst.status.FAILED
-			]);
+		expect(recorder.calls).toEqual([]);
+		expect(r2Service.getObj).not.toHaveBeenCalled();
 	});
 
-	it('serves D1-authorized inline attachments from both anonymous routes', async () => {
+	it('denies ready inline attachments from both anonymous routes without touching storage', async () => {
 		const recorder = createDbStub({
 			attachmentRows: [{
 				key: 'attachments/inline-image.png',
@@ -252,11 +242,12 @@ describe('attachment access control', () => {
 			createExecutionContext()
 		);
 
-		expect(directResponse.status).toBe(200);
-		expect(await directResponse.text()).toBe('inline');
-		expect(apiResponse.status).toBe(200);
-		expect(await apiResponse.text()).toBe('inline');
-		expect(r2Service.getObj).toHaveBeenCalledTimes(2);
+		expect(directResponse.status).toBe(404);
+		expect(apiResponse.status).toBe(404);
+		expect(directResponse.headers.get('Cache-Control')).toContain('no-store');
+		expect(apiResponse.headers.get('Cache-Control')).toContain('no-store');
+		expect(r2Service.getObj).not.toHaveBeenCalled();
+		expect(recorder.calls).toEqual([]);
 	});
 
 	it('does not serve a pending inline attachment even when the object exists', async () => {

@@ -1,4 +1,5 @@
 import app from '../hono/hono';
+import { inlineAttachmentResponse } from '../service/inline-attachment-service';
 import emailService from '../service/email-service';
 import result from '../model/result';
 import attService from '../service/att-service';
@@ -31,3 +32,7 @@ app.get('/allEmail/latest', async (c) => {
 	const list = await emailService.allEmailLatest(c, c.req.query());
 	return c.json(result.ok(list));
 })
+
+app.get('/allEmail/attachment/inline', async (c) => {
+	return inlineAttachmentResponse(c, c.req.query(), undefined, { allMail: true });
+});

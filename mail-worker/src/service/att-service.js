@@ -246,38 +246,6 @@ const attService = {
 		).all();
 	},
 
-	async isPublicInlineKey(c, key) {
-		if (!key || !key.startsWith(constant.ATTACHMENT_PREFIX)) {
-			return false;
-		}
-
-		if (!c.env?.db) {
-			return false;
-		}
-
-		try {
-			const row = await c.env.db.prepare(`
-				SELECT a.att_id
-				FROM attachments a
-				JOIN email e ON e.email_id = a.email_id
-				WHERE a.key = ?
-				  AND a.type = ?
-				  AND a.status = ?
-				  AND e.status NOT IN (?, ?)
-				LIMIT 1
-			`).bind(
-				key,
-				attConst.type.EMBED,
-				attConst.status.READY,
-				emailConst.status.SAVING,
-				emailConst.status.FAILED
-			).first();
-			return !!row;
-		} catch (e) {
-			return false;
-		}
-	},
-
 	async reconcileReceived(c, emailId) {
 		const { results: rows = [] } = await c.env.db.prepare(`
 			SELECT att_id AS attId, key, status, message
@@ -434,8 +402,8 @@ const attService = {
 		];
 
 		if (userId !== undefined && userId !== null) {
-			filters.push('a.user_id = ?');
-			bindings.push(userId);
+			filters.push('a.user_id = ?', 'e.user_id = ?', 'e.is_del = 0');
+			bindings.push(userId, userId);
 		}
 
 		const attRow = await c.env.db.prepare(`
