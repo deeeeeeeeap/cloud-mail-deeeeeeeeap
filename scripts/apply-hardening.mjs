@@ -3,7 +3,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 function replace(path, before, after) {
   const text = readFileSync(path, 'utf8');
-  if (text.includes(after)) return;
   if (text.split(before).length !== 2) throw new Error(`Expected exactly one audited match: ${path}: ${before.slice(0, 100)}`);
   writeFileSync(path, text.replace(before, after));
 }
