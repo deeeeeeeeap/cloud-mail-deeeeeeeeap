@@ -47,17 +47,13 @@ test('the expanded caret rotates once and resets when the menu closes', () => {
   assert.match(caret, /prefers-reduced-motion: reduce/)
 })
 
-test('every custom input dropdown uses actual menu visibility and the shared caret', () => {
+test('custom input dropdowns use the visible shared select without hidden overlays', () => {
   for (const path of selectors) {
     const source = read(path)
-    const count = (source.match(/ref="(?:mySelect|bindSelect)"/g) || []).length
-    assert.ok(count > 0, path)
-    assert.equal((source.match(/@visible-change="(?:selectOpen|bindSelectOpen) = \$event"/g) || []).length, count, path)
-    assert.equal((source.match(/<DropdownChevron :expanded="(?:selectOpen|bindSelectOpen)"/g) || []).length, count, path)
-    assert.match(source, /const selectOpen = ref\(false\)/)
-    assert.match(source, /select-trigger-label/)
-    assert.match(source, /(?:mySelect\.value|select\?)\.focus\(\)/)
-    assert.doesNotMatch(source, /setting-icon|mingcute:down-small-fill/)
+    assert.match(source, /import UiSelect/)
+    assert.match(source, /<UiSelect/)
+    assert.doesNotMatch(source, /mySelect|bindSelect|select-trigger-label|mingcute:down-small-fill/)
+    assert.doesNotMatch(source, /const openSelect|class="select"/)
   }
 })
 
@@ -79,16 +75,16 @@ test('manual delivery keeps neutral hover and expansion surfaces with keyboard f
   assert.match(source, /if \(action === 'delivery-ack-unknown' \|\| action === 'delivery-fail-unknown'\) \{\s+return t\('unknownDeliveryConfirm'\)/)
 })
 
-test('shared trigger labels center the caret without offsets and bound long labels', () => {
+test('address controls retain a real gap and reset input-group negative margins', () => {
   const source = read('style.css')
-  assert.match(source, /\.select-trigger-label \{\s+display: inline-flex;\s+align-items: center;/)
-  assert.match(source, /max-width: min\(240px, 45vw\)/)
-  assert.match(source, /\.select-trigger-label > span \{[\s\S]*?text-overflow: ellipsis;/)
-  assert.match(caret, /flex: 0 0 16px;/)
+  assert.match(source, /\.mail-address-field\.el-input-group \{ gap: 8px;/)
+  assert.match(source, /max-width: 168px/)
+  assert.match(source, /margin: 0 !important/)
+  assert.match(source, /min-width: 0; flex: 1; border-radius: 8px/)
 })
 
 test('every affected template compiles with the shared chevron component', () => {
-  for (const path of [...selectors, 'layout/header/index.vue', 'views/maintenance/index.vue', 'views/code-center/index.vue', 'components/dropdown-chevron/index.vue']) {
+  for (const path of [...selectors, 'layout/header/index.vue', 'views/maintenance/index.vue', 'views/code-center/index.vue', 'components/dropdown-chevron/index.vue', 'components/ui-select/index.vue', 'components/ui-select/selector-icon.vue']) {
     const {descriptor, errors} = parse(read(path), {filename: path})
     assert.deepEqual(errors, [], path)
     assert.deepEqual(compileTemplate({source: descriptor.template.content, filename: path, id: 'ui-polish'}).errors, [], path)
