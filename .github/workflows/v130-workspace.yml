@@ -12,11 +12,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: 18aa76549a8890436e988eb1425a2d0c2ea28f62
           persist-credentials: false
       - name: Archive exact reviewed main source
         run: |
-          test "$(git rev-parse HEAD^)" = 18aa76549a8890436e988eb1425a2d0c2ea28f62
-          git archive --format=tar HEAD^ | gzip -n > /tmp/v130-main-source.tar.gz
+          test "$(git rev-parse HEAD)" = 18aa76549a8890436e988eb1425a2d0c2ea28f62
+          git archive --format=tar HEAD | gzip -n > /tmp/v130-main-source.tar.gz
           sha256sum /tmp/v130-main-source.tar.gz
       - uses: actions/upload-artifact@v4
         with:
