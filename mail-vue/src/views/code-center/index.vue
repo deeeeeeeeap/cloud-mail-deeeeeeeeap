@@ -51,7 +51,6 @@
         <article class="code-card" v-for="item in codes" :key="`${scope}-${item.emailId}`"
           :class="{stale: item.isStale, copied: copiedEmailId === item.emailId}">
           <div class="card-source">
-            <span class="source-avatar" aria-hidden="true">{{ (item.name || item.sendEmail || '?').slice(0, 1).toUpperCase() }}</span>
             <div class="source-identity">
               <h2 :title="item.sendEmail">{{ item.name || item.sendEmail || '-' }}</h2>
               <p class="recipient" :title="item.toEmail"><span class="sr-only">{{ $t('ux.codeTo') }}: </span>{{ item.toEmail || '-' }}</p>
@@ -384,8 +383,7 @@ getList(true)
 .code-card { min-width: 0; padding: 18px 20px 4px; border: 1px solid var(--el-border-color-light); border-radius: 14px; background: var(--el-bg-color); transition: border-color var(--transition-fast); }
 .code-card.copied { border-color: var(--el-color-primary); }
 .code-card.stale { background: var(--extra-light-fill); }
-.card-source { display: flex; align-items: center; gap: 10px; }
-.source-avatar { width: 36px; height: 36px; flex-shrink: 0; display: grid; place-items: center; border-radius: 10px; background: var(--el-fill-color-light); font-weight: 650; color: var(--el-text-color-regular); }
+.card-source { min-width: 0; }
 .source-identity { min-width: 0; }
 .source-identity h2 { font-size: 14px; font-weight: 650; overflow-wrap: anywhere; line-height: 1.4; }
 .recipient { font-size: 12px; color: var(--el-text-color-secondary); overflow-wrap: anywhere; margin-top: 3px; }

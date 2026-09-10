@@ -84,6 +84,7 @@
             <div @click.stop="openSelect">
               <el-select
                   ref="mySelect"
+                  @visible-change="selectOpen = $event"
                   v-model="addForm.suffix"
                   :placeholder="$t('select')"
                   class="select"
@@ -95,9 +96,9 @@
                     :value="item"
                 />
               </el-select>
-              <div>
-                <span>{{ addForm.suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+              <div class="select-trigger-label">
+                <span :title="addForm.suffix">{{ addForm.suffix }}</span>
+                <DropdownChevron :expanded="selectOpen"/>
               </div>
             </div>
           </template>
@@ -129,6 +130,7 @@
   </div>
 </template>
 <script setup>
+import DropdownChevron from "@/components/dropdown-chevron/index.vue";
 import {Icon} from "@iconify/vue";
 import {computed, nextTick, onMounted, onUnmounted, reactive, ref, watch} from "vue";
 import {
@@ -184,6 +186,7 @@ const queryParams = {
   size: 30
 }
 
+const selectOpen = ref(false)
 const mySelect = ref()
 
 if (hasPerm('account:query')) {
@@ -202,6 +205,7 @@ watch(() => settingStore.domainList, (list) => {
 
 
 const openSelect = () => {
+  mySelect.value.focus()
   mySelect.value.toggleMenu()
 }
 
@@ -637,12 +641,6 @@ function submit() {
   transition: background-color var(--transition-fast), color var(--transition-fast);
   &:hover { color: var(--el-color-primary); background: var(--base-fill); }
   &[aria-pressed="true"] { color: var(--el-color-primary); background: var(--el-color-primary-light-8); }
-}
-
-
-.setting-icon {
-  position: relative;
-  top: 6px;
 }
 
 :deep(.el-input-group__append) {

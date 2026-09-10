@@ -168,6 +168,7 @@
             <div @click.stop="openSelect">
               <el-select
                   ref="mySelect"
+                  @visible-change="selectOpen = $event"
                   v-model="addForm.suffix"
                   :placeholder="$t('select')"
                   class="select"
@@ -179,9 +180,9 @@
                     :value="item"
                 />
               </el-select>
-              <div>
-                <span>{{ addForm.suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+              <div class="select-trigger-label">
+                <span :title="addForm.suffix">{{ addForm.suffix }}</span>
+                <DropdownChevron :expanded="selectOpen"/>
               </div>
             </div>
           </template>
@@ -373,6 +374,7 @@
 </template>
 
 <script setup>
+import DropdownChevron from "@/components/dropdown-chevron/index.vue";
 import {defineOptions, h, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
 import {
   userList,
@@ -474,6 +476,7 @@ const pagerCount = ref(10)
 const settingLoading = ref(false)
 const tableLoading = ref(true)
 const roleList = reactive([])
+const selectOpen = ref(false)
 const mySelect = ref({})
 const accountList = reactive([])
 const accountParams = reactive({
@@ -695,6 +698,7 @@ const tableRowFormatter = (data) => {
 }
 
 const openSelect = () => {
+  mySelect.value.focus()
   mySelect.value.toggleMenu()
 }
 
@@ -1271,11 +1275,6 @@ function adjustWidth() {
   pointer-events: none;
   transition: var(--loading-hide-transition);
   opacity: 0;
-}
-
-.setting-icon {
-  position: relative;
-  top: 6px;
 }
 
 .right-dropdown-item {

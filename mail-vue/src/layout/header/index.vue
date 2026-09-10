@@ -35,7 +35,7 @@
       <el-dropdown ref="userinfoRef" trigger="click" placement="bottom-end" @visible-change="e => userInfoShow = e" popper-class="detail-dropdown">
         <button class="avatar" type="button" :aria-label="$t('accountMenu')" :aria-expanded="userInfoShow" @keydown.esc.stop="userinfoRef.handleClose()">
           <span class="avatar-text">{{ userInitial }}</span>
-          <Icon class="setting-icon" icon="mingcute:down-small-fill" width="24" height="24"/>
+          <DropdownChevron class="account-chevron" :expanded="userInfoShow"/>
         </button>
         <template #dropdown>
           <div class="user-details" @keydown.esc.stop="userinfoRef.handleClose()">
@@ -77,6 +77,7 @@
 </template>
 
 <script setup>
+import DropdownChevron from "@/components/dropdown-chevron/index.vue";
 import {logout} from "@/request/login.js";
 import {Icon} from "@iconify/vue";
 import {useUiStore} from "@/store/ui.js";
@@ -359,7 +360,7 @@ async function clickLogout() {
       border-radius: 10px;
       font-weight: 600;
     }
-    .setting-icon { width: 18px; color: var(--secondary-text-color); }
+    .account-chevron { width: 16px; color: var(--secondary-text-color); }
   }
 }
 
@@ -369,7 +370,7 @@ async function clickLogout() {
   .breadcrumb-item { font-size: 15px; }
   .writer-box { padding: 0 10px; gap: 5px; }
   .toolbar { gap: 0; .avatar { margin-left: 4px; } }
-  .toolbar .setting-icon { display: none; }
+  .toolbar .account-chevron { display: none; }
   .icon-button { width: 44px; height: 44px; }
   .toolbar .avatar { min-width: 44px; min-height: 44px; margin-left: 0; justify-content: center; }
   .desktop-utility { display: none; }
