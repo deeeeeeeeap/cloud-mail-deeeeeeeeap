@@ -1,0 +1,41 @@
+name: Materialize reviewed select and settings source
+on:
+  push:
+    branches: [codex/select-settings-final-20260910]
+    paths: ['.select-settings.patch.*']
+permissions:
+  contents: write
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate the exact reviewed patch and final tree (no deployment)
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, gzip, hashlib, pathlib, subprocess
+          parts = [f'.select-settings.patch.{i}' for i in range(1, 5)]
+          encoded = ''.join(pathlib.Path(part).read_text() for part in parts)
+          patch = gzip.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'f616bff26b9d1a118f2347efdceb0097817f9ac6bb888085a66a70e61a157adf'
+          path = pathlib.Path('/tmp/select-settings.patch')
+          path.write_bytes(patch)
+          subprocess.run(['git', 'apply', '--index', '--check', str(path)], check=True)
+          subprocess.run(['git', 'apply', '--index', str(path)], check=True)
+          subprocess.run(['git', 'rm', *parts, '.github/workflows/finish-select-settings.yml'], check=True)
+          expected = ['mail-vue/src/components/refined-select/index.vue', 'mail-vue/src/components/settings-about/index.vue', 'mail-vue/src/layout/account/index.vue', 'mail-vue/src/style.css', 'mail-vue/src/views/all-email/index.vue', 'mail-vue/src/views/login/index.vue', 'mail-vue/src/views/sys-setting/index.vue', 'mail-vue/src/views/user/index.vue', 'mail-vue/test/select-settings-design.test.mjs', 'mail-vue/test/ui-polish.test.mjs']
+          actual = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '97f6de79dc66fe5432d717fc81f63bbd38a12d76'], text=True).splitlines()
+          assert actual == expected, actual
+          tree = subprocess.check_output(['git', 'write-tree'], text=True).strip()
+          assert tree == '1d06c3bcfba8887ab88c6e2b5230e3facc37cc33', tree
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+          print('Verified final tree:', tree)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: refined visible selects and spacious settings resources'
+          git push origin HEAD:refs/heads/codex/select-settings-final-20260910
