@@ -783,10 +783,10 @@ async function resolveClose(action) {
     @media (max-width: 1024px) {
       width: 100%;
       height: 100dvh;
-      padding-bottom: max(16px, env(safe-area-inset-bottom));
       border-radius: 0;
       border: 0;
       padding: 16px;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
     }
 
     @media (min-width: 1025px) {

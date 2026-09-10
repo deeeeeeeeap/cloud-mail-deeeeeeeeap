@@ -152,3 +152,9 @@ test('editor failures are visible and retryable; close actions are explicit', ()
   assert.doesNotMatch(writer, /action === 'cancel'/)
   assert.match(writer, /focusKeepEditing/)
 })
+
+// A later padding shorthand must not silently erase the phone's safe-area inset.
+test('mobile writer retains bottom safe-area padding after its base padding', () => {
+  const writer = readFileSync(new URL('../src/layout/write/index.vue', import.meta.url), 'utf8')
+  assert.match(writer, /height: 100dvh;\s+border-radius: 0;\s+border: 0;\s+padding: 16px;\s+padding-bottom: max\(16px, env\(safe-area-inset-bottom\)\);/)
+})
