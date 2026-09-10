@@ -1,8 +1,12 @@
 <template>
   <div class="perm-box">
     <div class="header-actions">
-      <Icon class="icon" icon="ion:add-outline" width="23" height="23" @click="openAddRole"/>
-      <Icon class="icon" icon="ion:reload" width="18" height="18" @click="refresh"/>
+      <button type="button" class="icon-button" :aria-label="$t('add')" :title="$t('add')" @click="openAddRole">
+        <Icon aria-hidden="true" icon="ion:add-outline" width="23" height="23"/>
+      </button>
+      <button type="button" class="icon-button" :aria-label="$t('refreshList')" :title="$t('refreshList')" @click="refresh">
+        <Icon aria-hidden="true" icon="ion:reload" width="18" height="18"/>
+      </button>
     </div>
     <el-scrollbar class="perm-scrollbar">
       <div class="loading" :class="tableLoading ? 'loading-show' : 'loading-hide'"
@@ -427,9 +431,12 @@ onUnmounted(() => {
   height: 100%;
   overflow: hidden;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 
   .perm-scrollbar {
-    height: 100%;
+    flex: 1;
+    min-height: 0;
   }
 }
 
@@ -469,6 +476,22 @@ onUnmounted(() => {
   }
 }
 
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
+
+  &:hover { color: var(--el-color-primary); background: var(--light-fill); }
+  &:active { transform: translateY(1px); }
+}
+
 .warning {
   position: relative;
   left: 5px;
@@ -484,7 +507,7 @@ onUnmounted(() => {
 }
 
 .loading {
-  height: calc(100% - 41px);
+  height: 100%;
   width: 100%;
   display: flex;
   align-items: center;

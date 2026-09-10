@@ -221,6 +221,8 @@ const en = {
     emailCount: 'Total {total}',
     error404: '404 Not Found',
     home: 'Home',
+    back: 'Back',
+    download: 'Download',
     loginBtn: 'Sign in',
     regBtn: 'Sign up',
     loginTitle: 'Sign in to your account to access email',

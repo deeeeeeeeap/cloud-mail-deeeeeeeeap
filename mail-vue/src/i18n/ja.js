@@ -221,6 +221,8 @@ const ja = {
     emailCount: '計 {total} 通',
     error404: '404 エラー、ページが見つかりません',
     home: 'ホームへ戻る',
+    back: '戻る',
+    download: 'ダウンロード',
     loginBtn: 'ログイン',
     regBtn: '登録',
     loginTitle: 'アカウント情報を入力してメールシステムを利用開始',

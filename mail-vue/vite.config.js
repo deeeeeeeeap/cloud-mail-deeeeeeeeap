@@ -1,6 +1,7 @@
 import {defineConfig, loadEnv} from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
+import fs from 'fs'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import {ElementPlusResolver} from 'unplugin-vue-components/resolvers'
@@ -28,8 +29,39 @@ const elementPlusDeps = new Set([
     'normalize-wheel-es'
 ]);
 
+function cleanExternalOutDir(outDir) {
+    return {
+        name: 'clean-external-out-dir',
+        apply: 'build',
+        enforce: 'pre',
+        configResolved(config) {
+            // Vite does not empty output directories outside the project root.
+            // Release assets are disposable and must not accumulate stale hashes.
+            removeTree(config.build.outDir || outDir);
+        }
+    };
+}
+
+function removeTree(target, root = target) {
+    if (target === root && path.basename(target) !== 'dist') {
+        throw new Error(`Refusing to clean unexpected release output: ${target}`);
+    }
+    if (!fs.existsSync(target)) return;
+    for (const entry of fs.readdirSync(target)) {
+        const child = path.join(target, entry);
+        const stat = fs.lstatSync(child);
+        if (stat.isDirectory() && !stat.isSymbolicLink()) {
+            removeTree(child, root);
+        } else {
+            fs.unlinkSync(child);
+        }
+    }
+    fs.rmdirSync(target);
+}
+
 export default defineConfig(({mode}) => {
     const env = loadEnv(mode, process.cwd(), 'VITE')
+    const outDir = path.resolve(process.cwd(), env.VITE_OUT_DIR || 'dist')
     return {
         server: {
             host: true,
@@ -37,7 +69,9 @@ export default defineConfig(({mode}) => {
             hmr: true,
         },
         base: env.VITE_STATIC_URL || '/',
-        plugins: [vue(),
+        plugins: [
+            ...(mode === 'release' ? [cleanExternalOutDir(outDir)] : []),
+            vue(),
             VitePWA({
                 injectRegister: 'script-defer',
                 manifest: {

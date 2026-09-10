@@ -1,7 +1,9 @@
 <template>
   <div class="reg-key">
     <div class="header-actions">
-      <Icon class="icon" icon="ion:add-outline" width="23" height="23" @click="openAdd"/>
+      <button type="button" class="icon-button" :aria-label="$t('add')" :title="$t('add')" @click="openAdd">
+        <Icon aria-hidden="true" icon="ion:add-outline" width="23" height="23"/>
+      </button>
       <div class="search">
         <el-input
             v-model="params.code"
@@ -10,9 +12,15 @@
         >
         </el-input>
       </div>
-      <Icon class="icon" icon="iconoir:search" @click="search" width="20" height="20"/>
-      <Icon class="icon" icon="ion:reload" width="18" height="18" @click="refresh"/>
-      <Icon class="icon" icon="fluent:broom-sparkle-16-regular" width="22" height="22" @click="clearNotUse"/>
+      <button type="button" class="icon-button" :aria-label="$t('searchRegKeyDesc')" :title="$t('searchRegKeyDesc')" @click="search">
+        <Icon aria-hidden="true" icon="iconoir:search" width="20" height="20"/>
+      </button>
+      <button type="button" class="icon-button" :aria-label="$t('refreshList')" :title="$t('refreshList')" @click="refresh">
+        <Icon aria-hidden="true" icon="ion:reload" width="18" height="18"/>
+      </button>
+      <button type="button" class="icon-button" :aria-label="$t('clear')" :title="$t('clear')" @click="clearNotUse">
+        <Icon aria-hidden="true" icon="fluent:broom-sparkle-16-regular" width="22" height="22"/>
+      </button>
     </div>
 
     <el-scrollbar class="scrollbar">
@@ -24,7 +32,7 @@
           <div class="code-info">
             <div class="info-left">
               <div class="info-left-item">
-                <span class="code" @click="copyCode(item.code)">{{ item.code }}</span>
+              <button type="button" class="code code-button" :aria-label="$t('copyCode') + ': ' + item.code" @click="copyCode(item.code)">{{ item.code }}</button>
               </div>
               <div class="info-left-item">
                 <div>{{ $t('remainingUses') }}：</div>
@@ -64,7 +72,9 @@
       <div class="container">
         <el-input v-model="addForm.code" :placeholder="$t('regKey')">
           <template #suffix>
-            <Icon @click.stop="genCode" class="gen-code" icon="bitcoin-icons:refresh-filled" width="24" height="24"/>
+            <button type="button" class="gen-code" :aria-label="$t('refreshList')" :title="$t('refreshList')" @click.stop="genCode">
+              <Icon aria-hidden="true" icon="bitcoin-icons:refresh-filled" width="24" height="24"/>
+            </button>
           </template>
         </el-input>
         <el-select v-model="addForm.roleId" :placeholder="$t('roleDesc')">
@@ -499,7 +509,11 @@ function openAdd() {
 }
 
 .gen-code {
-  color: #606266;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: inherit;
   cursor: pointer;
 }
 
@@ -535,9 +549,31 @@ function openAdd() {
     }
   }
 
-  .icon {
-    cursor: pointer;
-  }
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
+
+  &:hover { color: var(--el-color-primary); background: var(--light-fill); }
+  &:active { transform: translateY(1px); }
+}
+
+.code-button {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }
 
 :deep(.el-table__inner-wrapper:before) {

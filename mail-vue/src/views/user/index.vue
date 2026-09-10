@@ -1,7 +1,9 @@
 <template>
   <div class="user-box">
     <div class="header-actions">
-      <Icon class="icon" icon="ion:add-outline" width="23" height="23" @click="openAdd"/>
+      <button type="button" class="icon-button" :aria-label="$t('add')" :title="$t('add')" @click="openAdd">
+        <Icon aria-hidden="true" icon="ion:add-outline" width="23" height="23"/>
+      </button>
       <div class="search">
         <el-input
             v-model="params.email"
@@ -17,13 +19,19 @@
         <el-option :key="1" :label="$t('banned')" :value="1"/>
         <el-option :key="-2" :label="$t('deleted')" :value="-2"/>
       </el-select>
-      <Icon class="icon" icon="iconoir:search" @click="search" width="20" height="20"/>
-      <Icon class="icon" @click="changeTimeSort" icon="material-symbols-light:timer-arrow-down-outline"
-            v-if="params.timeSort === 1" width="28" height="28"/>
-      <Icon class="icon" @click="changeTimeSort" icon="material-symbols-light:timer-arrow-up-outline" v-else width="28"
-            height="28"/>
-      <Icon class="icon" icon="ion:reload" width="18" height="18" @click="refresh"/>
-      <Icon class="icon" icon="uiw:delete" width="16" height="16" @click="delUser"/>
+      <button type="button" class="icon-button" :aria-label="$t('searchByEmail')" :title="$t('searchByEmail')" @click="search">
+        <Icon aria-hidden="true" icon="iconoir:search" width="20" height="20"/>
+      </button>
+      <button type="button" class="icon-button" :aria-label="$t('order')" :title="$t('order')" @click="changeTimeSort">
+        <Icon aria-hidden="true" v-if="params.timeSort === 1" icon="material-symbols-light:timer-arrow-down-outline" width="28" height="28"/>
+        <Icon aria-hidden="true" v-else icon="material-symbols-light:timer-arrow-up-outline" width="28" height="28"/>
+      </button>
+      <button type="button" class="icon-button" :aria-label="$t('refreshList')" :title="$t('refreshList')" @click="refresh">
+        <Icon aria-hidden="true" icon="ion:reload" width="18" height="18"/>
+      </button>
+      <button type="button" class="icon-button" :aria-label="$t('delete')" :title="$t('delete')" @click="delUser">
+        <Icon aria-hidden="true" icon="uiw:delete" width="16" height="16"/>
+      </button>
     </div>
     <el-scrollbar ref="scrollbarRef" class="scrollbar">
       <div>
@@ -1127,6 +1135,22 @@ function adjustWidth() {
   .icon {
     cursor: pointer;
   }
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
+
+  &:hover { color: var(--el-color-primary); background: var(--light-fill); }
+  &:active { transform: translateY(1px); }
 }
 
 .container {

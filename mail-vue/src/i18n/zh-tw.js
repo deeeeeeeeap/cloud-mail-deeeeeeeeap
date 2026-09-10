@@ -221,6 +221,8 @@ const zhTw = {
     emailCount: '共 {total} 封',
     error404: '404錯誤, 找不到頁面',
     home: '返回首頁',
+    back: '返回',
+    download: '下載',
     loginBtn: '登入',
     regBtn: '註冊',
     loginTitle: '輸入帳號資訊以開始使用信箱系統',

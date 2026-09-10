@@ -1,14 +1,24 @@
 <template>
   <div class="box">
     <div class="header-actions">
-      <Icon class="icon" icon="material-symbols-light:arrow-back-ios-new" width="20" height="20" @click="handleBack"/>
-      <Icon v-perm="'email:delete'" class="icon" icon="uiw:delete" width="16" height="16" @click="handleDelete"/>
+      <button type="button" class="icon-button" :aria-label="$t('back')" :title="$t('back')" @click="handleBack">
+        <Icon aria-hidden="true" icon="material-symbols-light:arrow-back-ios-new" width="20" height="20"/>
+      </button>
+      <button v-perm="'email:delete'" type="button" class="icon-button" :aria-label="$t('delete')" :title="$t('delete')" @click="handleDelete">
+        <Icon aria-hidden="true" icon="uiw:delete" width="16" height="16"/>
+      </button>
       <span class="star" v-if="emailStore.contentData.showStar">
-        <Icon class="icon" @click="changeStar" v-if="email.isStar" icon="fluent-color:star-16" width="20" height="20"/>
-        <Icon class="icon" @click="changeStar" v-else icon="solar:star-line-duotone" width="18" height="18"/>
+        <button type="button" class="icon-button" :aria-label="$t('star')" :title="$t('star')" @click="changeStar">
+          <Icon aria-hidden="true" v-if="email.isStar" icon="fluent-color:star-16" width="20" height="20"/>
+          <Icon aria-hidden="true" v-else icon="solar:star-line-duotone" width="18" height="18"/>
+        </button>
       </span>
-      <Icon class="icon" v-if="emailStore.contentData.showReply" v-perm="'email:send'"  @click="openReply" icon="la:reply" width="21" height="21" />
-      <Icon class="icon" v-if="emailStore.contentData.showReply" v-perm="'email:send'"  @click="openForward" icon="iconoir:arrow-up-right" width="20" height="20" />
+      <button type="button" class="icon-button" v-if="emailStore.contentData.showReply" v-perm="'email:send'" :aria-label="$t('reply')" :title="$t('reply')" @click="openReply">
+        <Icon aria-hidden="true" icon="la:reply" width="21" height="21"/>
+      </button>
+      <button type="button" class="icon-button" v-if="emailStore.contentData.showReply" v-perm="'email:send'" :aria-label="$t('forward')" :title="$t('forward')" @click="openForward">
+        <Icon aria-hidden="true" icon="iconoir:arrow-up-right" width="20" height="20"/>
+      </button>
     </div>
     <div></div>
     <el-scrollbar class="scrollbar">
@@ -46,16 +56,20 @@
             <div class="att-box">
 
               <div class="att-item" v-for="att in email.attList" :key="att.attId">
-                <div class="att-icon" @click="showImage(att)">
+                <button type="button" class="att-icon attachment-button" :disabled="!isImage(att.filename)" :aria-label="$t('preview') + ': ' + att.filename" @click="showImage(att)">
                   <Icon v-bind="getIconByName(att.filename)" />
-                </div>
-                <div class="att-name" @click="showImage(att)">
+                </button>
+                <button type="button" class="att-name attachment-button" :disabled="!isImage(att.filename)" :aria-label="$t('preview') + ': ' + att.filename" @click="showImage(att)">
                   {{ att.filename }}
-                </div>
+                </button>
                 <div class="att-size">{{ formatBytes(att.size) }}</div>
                 <div class="opt-icon att-icon">
-                  <Icon v-if="isImage(att.filename)" icon="hugeicons:view" width="22" height="22" @click="showImage(att)"/>
-                  <Icon icon="system-uicons:push-down" width="22" height="22" @click="downloadAttachment(att)"/>
+                  <button v-if="isImage(att.filename)" type="button" class="attachment-button" :aria-label="$t('preview') + ': ' + att.filename" :title="$t('preview')" @click="showImage(att)">
+                    <Icon aria-hidden="true" icon="hugeicons:view" width="22" height="22"/>
+                  </button>
+                  <button type="button" class="attachment-button" :aria-label="$t('download') + ': ' + att.filename" :title="$t('download')" @click="downloadAttachment(att)">
+                    <Icon aria-hidden="true" icon="system-uicons:push-down" width="22" height="22"/>
+                  </button>
                 </div>
               </div>
             </div>
@@ -355,6 +369,8 @@ const handleDelete = () => {
 .box {
   height: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .header-actions {
@@ -370,14 +386,43 @@ const handleDelete = () => {
     justify-content: center;
     min-width: 21px;
   }
-  .icon {
-    cursor: pointer;
-  }
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
+
+  &:hover { color: var(--el-color-primary); background: var(--light-fill); }
+  &:active { transform: translateY(1px); }
+}
+
+.attachment-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) { color: var(--el-color-primary); background: var(--light-fill); }
+  &:disabled { cursor: default; opacity: .72; }
 }
 
 
 .scrollbar {
-  height: calc(100% - 38px);
+  flex: 1;
+  min-height: 0;
   width: 100%;
 }
 
@@ -454,6 +499,8 @@ const handleDelete = () => {
           overflow: hidden;
           text-overflow: ellipsis;
           word-break: break-all;
+          text-align: left;
+          font: inherit;
         }
 
         .att-image {

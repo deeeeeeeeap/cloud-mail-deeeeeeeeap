@@ -39,26 +39,29 @@
           </template>
           <template #suffix>
             <div style="display: flex;margin-right: 3px;">
-              <Icon icon="fa7-solid:user-plus" width="20" height="20" class="add-contact" @click.stop="openContacts" />
+              <button type="button" class="add-contact icon-button" :aria-label="$t('selectContacts')" :title="$t('selectContacts')" @click.stop="openContacts">
+                <Icon aria-hidden="true" icon="fa7-solid:user-plus" width="20" height="20"/>
+              </button>
             </div>
           </template>
         </el-input-tag>
         <el-input v-model="form.subject" :placeholder="t('subject')" />
         <tinyEditor :def-value="defValue" ref="editor" @change="change" @focus="focusChange" />
         <div class="button-item">
-          <div class="att-add" @click="chooseFile">
-            <Icon icon="iconamoon:attachment-fill" width="24" height="24"/>
-          </div>
-          <div class="att-clear" @click="clearContent">
-            <Icon icon="icon-park-outline:clear-format" width="24" height="24 "/>
-          </div>
+          <button type="button" class="att-add icon-button" :aria-label="$t('attachments')" :title="$t('attachments')" @click="chooseFile">
+            <Icon aria-hidden="true" icon="iconamoon:attachment-fill" width="24" height="24"/>
+          </button>
+          <button type="button" class="att-clear icon-button" :aria-label="$t('clear')" :title="$t('clear')" @click="clearContent">
+            <Icon aria-hidden="true" icon="icon-park-outline:clear-format" width="24" height="24"/>
+          </button>
           <div class="att-list">
             <div class="att-item" v-for="(item,index) in form.attachments" :key="index">
               <Icon v-bind="getIconByName(item.filename)"/>
               <span class="att-filename">{{ item.filename }}</span>
               <span class="att-size">{{ formatBytes(item.size) }}</span>
-              <Icon style="cursor: pointer;" icon="material-symbols-light:close-rounded" @click="delAtt(index)"
-                    width="22" height="22"/>
+              <button type="button" class="remove-attachment" :aria-label="$t('delete') + ': ' + item.filename" :title="$t('delete')" @click="delAtt(index)">
+                <Icon aria-hidden="true" icon="material-symbols-light:close-rounded" width="22" height="22"/>
+              </button>
             </div>
           </div>
           <div>
@@ -795,11 +798,11 @@ function close() {
         grid-template-columns: auto auto 1fr auto;
 
         .att-add {
-          cursor: pointer;
+          color: var(--regular-text-color);
         }
 
         .att-clear {
-          cursor: pointer;
+          color: var(--regular-text-color);
           margin-left: 10px;
         }
 
@@ -860,6 +863,36 @@ function close() {
 
 .add-contact {
   color: var(--regular-text-color)
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
+
+  &:hover { color: var(--el-color-primary); background: var(--light-fill); }
+  &:active { transform: translateY(1px); }
+}
+
+.remove-attachment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--regular-text-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+
+  &:hover { color: var(--el-color-danger); background: var(--el-color-danger-light-9); }
 }
 
 .write-select {

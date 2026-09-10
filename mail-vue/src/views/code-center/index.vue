@@ -43,7 +43,7 @@
           <div class="code-info">
             <div class="info-left">
               <div class="info-left-item">
-                <span class="code" :class="{hidden: item.isStale || !item.code}" @click.stop="copyCode(item)">{{ displayCode(item) }}</span>
+                <button type="button" class="code" :class="{hidden: item.isStale || !item.code}" :disabled="item.isStale || !item.code" :aria-label="$t('copyCode') + ': ' + displayCode(item)" @click.stop="copyCode(item)">{{ displayCode(item) }}</button>
                 <el-tag v-if="copiedEmailId === item.emailId" type="primary" role="status">{{ $t('copied') }}</el-tag>
               </div>
               <div class="info-left-item code-meta" :class="item.isStale ? 'expired' : ''">{{ codeStatusText(item) }}</div>
