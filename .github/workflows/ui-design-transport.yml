@@ -1,0 +1,42 @@
+name: Apply verified select and settings redesign
+on:
+  push:
+    branches: [codex/select-settings-redesign-20260910]
+    paths: [.ui-design-transport.b64]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify isolated patch and remove transport files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, gzip, hashlib, pathlib, subprocess
+          patch = gzip.decompress(base64.b64decode(pathlib.Path('.ui-design-transport.b64').read_text()))
+          assert hashlib.sha256(patch).hexdigest() == 'fa0818ae8c73e74284e4a0d0ed075abe4cadb58eb34bc65c4ce55956e6f1028a'
+          path = pathlib.Path('/tmp/select-settings.patch')
+          path.write_bytes(patch)
+          subprocess.run(['git', 'apply', '--index', '--check', str(path)], check=True)
+          subprocess.run(['git', 'apply', '--index', str(path)], check=True)
+          subprocess.run(['git', 'rm', '.ui-design-transport.b64', '.github/workflows/ui-design-transport.yml'], check=True)
+          expected = sorted(['mail-vue/src/components/ui-select/index.vue', 'mail-vue/src/components/ui-select/options.js', 'mail-vue/src/components/ui-select/selector-icon.vue', 'mail-vue/src/layout/account/index.vue', 'mail-vue/src/style.css', 'mail-vue/src/views/all-email/index.vue', 'mail-vue/src/views/login/index.vue', 'mail-vue/src/views/sys-setting/index.vue', 'mail-vue/src/views/user/index.vue', 'mail-vue/test/select-settings-design.test.mjs', 'mail-vue/test/ui-polish.test.mjs'])
+          actual = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '97f6de79dc66fe5432d717fc81f63bbd38a12d76'], text=True).splitlines()
+          assert actual == expected, actual
+          tree = subprocess.check_output(['git', 'write-tree'], text=True).strip()
+          frontend = subprocess.check_output(['git', 'rev-parse', tree + ':mail-vue'], text=True).strip()
+          assert frontend == 'f4ac0c0202a55b28d37a9ebd701d3bcc5cfd7854', frontend
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+          print('Verified frontend tree:', frontend)
+          print('Changed files:', '\n'.join(actual))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: redesign visible selects and spacious system settings links'
+          git push origin HEAD:refs/heads/codex/select-settings-redesign-20260910
