@@ -47,17 +47,14 @@ test('the expanded caret rotates once and resets when the menu closes', () => {
   assert.match(caret, /prefers-reduced-motion: reduce/)
 })
 
-test('every custom input dropdown uses actual menu visibility and the shared caret', () => {
+test('custom input selectors are visible controls rather than hidden click overlays', () => {
   for (const path of selectors) {
     const source = read(path)
-    const count = (source.match(/ref="(?:mySelect|bindSelect)"/g) || []).length
-    assert.ok(count > 0, path)
-    assert.equal((source.match(/@visible-change="(?:selectOpen|bindSelectOpen) = \$event"/g) || []).length, count, path)
-    assert.equal((source.match(/<DropdownChevron :expanded="(?:selectOpen|bindSelectOpen)"/g) || []).length, count, path)
-    assert.match(source, /const selectOpen = ref\(false\)/)
-    assert.match(source, /select-trigger-label/)
-    assert.match(source, /(?:mySelect\.value|select\?)\.focus\(\)/)
-    assert.doesNotMatch(source, /setting-icon|mingcute:down-small-fill/)
+    const count = (source.match(/<RefinedSelect /g) || []).length
+    assert.equal(count, path.includes('login') ? 3 : 1, path)
+    assert.match(source, /select-input-group/)
+    assert.doesNotMatch(source, /mySelect|bindSelect|openSelect|select-trigger-label|setting-icon|mingcute:down-small-fill/)
+    assert.equal((source.match(/:aria-label=/g) || []).length >= count, true)
   }
 })
 
@@ -79,12 +76,12 @@ test('manual delivery keeps neutral hover and expansion surfaces with keyboard f
   assert.match(source, /if \(action === 'delivery-ack-unknown' \|\| action === 'delivery-fail-unknown'\) \{\s+return t\('unknownDeliveryConfirm'\)/)
 })
 
-test('shared trigger labels center the caret without offsets and bound long labels', () => {
+test('separated input groups reset Element Plus offsets and retain a visible focus state', () => {
   const source = read('style.css')
-  assert.match(source, /\.select-trigger-label \{\s+display: inline-flex;\s+align-items: center;/)
-  assert.match(source, /max-width: min\(240px, 45vw\)/)
-  assert.match(source, /\.select-trigger-label > span \{[\s\S]*?text-overflow: ellipsis;/)
-  assert.match(caret, /flex: 0 0 16px;/)
+  assert.match(source, /el-input\.select-input-group[^\n]*gap: 8px/)
+  assert.match(source, /margin: 0 !important; height: 100%; border-radius: 8px !important/)
+  assert.match(source, /el-select__wrapper\.is-focused/)
+  assert.doesNotMatch(source, /select-trigger-label/)
 })
 
 test('every affected template compiles with the shared chevron component', () => {

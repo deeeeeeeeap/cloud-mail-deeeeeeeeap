@@ -111,7 +111,7 @@
                   </el-image>
                   <div class="background-btn">
                     <el-button class="opt-button" size="small" type="primary" plain @click="openSetBackground">{{ $t('editSetting') }}</el-button>
-                    <el-button class="opt-button" size="small" type="primary" plain @click="delBackground">{{ $t('delete') }}</el-button>
+                    <el-button class="opt-button" size="small" type="danger" plain @click="delBackground">{{ $t('delete') }}</el-button>
                   </div>
                 </div>
               </div>
@@ -355,37 +355,7 @@
           <div class="settings-card about">
             <div class="card-title">{{ $t('about') }}</div>
             <div class="card-content">
-              <div class="concerning-item">
-                <span>{{ $t('version') }} :</span>
-                <el-badge is-dot :hidden="!hasUpdate">
-                  <el-button @click="jump(projectRepo + '/releases')">
-                    {{ currentVersion }}
-                    <template #icon>
-                      <Icon icon="qlementine-icons:version-control-16" style="font-size: 20px" color="#1890FF"/>
-                    </template>
-                  </el-button>
-                </el-badge>
-              </div>
-              <div class="concerning-item">
-                <span>{{ $t('community') }} : </span>
-                <div class="community">
-                  <el-button @click="jump(projectRepo)">
-                    Github
-                    <template #icon>
-                      <Icon icon="codicon:github-inverted" width="22" height="22"/>
-                    </template>
-                  </el-button>
-                </div>
-              </div>
-              <div class="concerning-item">
-                <span>{{ $t('help') }} : </span>
-                <el-button @click="jump(projectDoc)">
-                  {{ t('document') }}
-                  <template #icon>
-                    <Icon color="#79D6B5" icon="fluent-color:document-32" width="18" height="18"/>
-                  </template>
-                </el-button>
-              </div>
+              <SettingsAbout :version="currentVersion" :repo-url="projectRepo" :docs-url="projectDoc" :has-update="hasUpdate"/>
             </div>
           </div>
         </div>
@@ -765,6 +735,7 @@
 </template>
 
 <script setup>
+import SettingsAbout from "@/components/settings-about/index.vue";
 import {computed, defineOptions, nextTick, reactive, ref} from "vue";
 import {deleteBackground, setBackground, setBlackList, settingQuery, settingSet} from "@/request/setting.js";
 import {useSettingStore} from "@/store/setting.js";
@@ -1699,6 +1670,8 @@ function editSetting(settingForm, refreshStatus = true) {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     min-width: 0;
+    column-gap: 10px;
+    row-gap: 8px;
     justify-items: flex-end;
     font-weight: normal;
   }
@@ -1923,8 +1896,9 @@ function editSetting(settingForm, refreshStatus = true) {
 
 .opt-button {
   width: fit-content !important;
-  min-height: 30px;
-  padding: 5px 10px;
+  min-height: 34px;
+  margin: 0 !important;
+  padding: 7px 12px;
   border-radius: var(--radius-md);
   font-size: 12px;
   line-height: 1.4;
@@ -1952,8 +1926,9 @@ function editSetting(settingForm, refreshStatus = true) {
 
 .r2domain {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  gap: 10px;
 
   .storage-type {
     margin-right: 3px;
@@ -2093,4 +2068,11 @@ form .el-button {
   .background-btn { flex-shrink: 0; }
 }
 
+/* Touch targets and wrapped action groups keep narrow settings cards usable. */
+@media (max-width: 480px) {
+  .settings-card .opt-button { min-height: 40px; }
+  .setting-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .setting-item > div:first-child { flex-wrap: wrap; }
+  .setting-item > div:last-child { max-width: 100%; }
+}
 </style>

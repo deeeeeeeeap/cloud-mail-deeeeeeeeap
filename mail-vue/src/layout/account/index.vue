@@ -79,28 +79,17 @@
     </el-scrollbar>
     <el-dialog v-model="showAdd" :title="$t('addAccount')">
       <div class="container">
-        <el-input v-model="addForm.email" ref="addRef" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
+        <el-input class="select-input-group" v-model="addForm.email" ref="addRef" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
           <template #append>
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  @visible-change="selectOpen = $event"
-                  v-model="addForm.suffix"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
-              <div class="select-trigger-label">
-                <span :title="addForm.suffix">{{ addForm.suffix }}</span>
-                <DropdownChevron :expanded="selectOpen"/>
-              </div>
-            </div>
+            <RefinedSelect v-model="addForm.suffix" :placeholder="$t('select')" :aria-label="$t('domain')" :title="addForm.suffix">
+              <el-option
+                v-for="item in domainList"
+                :key="item"
+                :label="item"
+                :value="item"
+                :title="item"
+              />
+            </RefinedSelect>
           </template>
         </el-input>
         <el-button class="btn" type="primary" @click="submit" :loading="addLoading"
@@ -130,7 +119,7 @@
   </div>
 </template>
 <script setup>
-import DropdownChevron from "@/components/dropdown-chevron/index.vue";
+import RefinedSelect from "@/components/refined-select/index.vue";
 import {Icon} from "@iconify/vue";
 import {computed, nextTick, onMounted, onUnmounted, reactive, ref, watch} from "vue";
 import {
@@ -186,8 +175,6 @@ const queryParams = {
   size: 30
 }
 
-const selectOpen = ref(false)
-const mySelect = ref()
 
 if (hasPerm('account:query')) {
   getAccountList()
@@ -203,11 +190,6 @@ watch(() => settingStore.domainList, (list) => {
   }
 }, {immediate: true})
 
-
-const openSelect = () => {
-  mySelect.value.focus()
-  mySelect.value.toggleMenu()
-}
 
 // Turnstile 按名字从 window 取回调，所以只能挂全局；但名字必须每个组件独立，
 // 登录页也有一个 turnstile，共用同一组名字时后挂载的会静默顶掉先挂载的
@@ -331,7 +313,6 @@ function showNullSetting(item) {
 function itemBg(accountId) {
   return accountStore.currentAccountId === accountId ? 'item-choose' : ''
 }
-
 
 
 function remove(account) {
@@ -643,11 +624,6 @@ function submit() {
   &[aria-pressed="true"] { color: var(--el-color-primary); background: var(--el-color-primary-light-8); }
 }
 
-:deep(.el-input-group__append) {
-  padding: 0 !important;
-  padding-left: 8px !important;
-  background: var(--el-bg-color);
-}
 
 :deep(.el-dialog) {
   width: 400px !important;
@@ -658,13 +634,6 @@ function submit() {
   }
 }
 
-.select {
-  position: absolute;
-  right: 30px;
-  width: 100px;
-  opacity: 0;
-  pointer-events: none;
-}
 
 :deep(.el-pagination .el-select) {
   width: 100px;

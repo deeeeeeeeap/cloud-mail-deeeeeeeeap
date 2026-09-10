@@ -270,18 +270,29 @@ svg { vertical-align: middle; }
     .el-dropdown-menu__item { min-height: 44px; }
 }
 
-/* Custom input prefix/suffix selectors share the same centered disclosure layout. */
-.select-trigger-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    max-width: min(240px, 45vw);
-    vertical-align: middle;
-    cursor: pointer;
+/* Independent input and selector surfaces, including Element Plus append/prepend slots. */
+.el-input.select-input-group { display: inline-flex; align-items: stretch; gap: 8px; min-width: 0; }
+.el-input.select-input-group > .el-input__wrapper { flex: 1 1 0; min-width: 0; border-radius: 8px !important; }
+.el-input.select-input-group > .el-input-group__append,
+.el-input.select-input-group > .el-input-group__prepend {
+    display: flex; align-items: stretch; flex: 0 1 auto; min-width: 0; max-width: 48%;
+    padding: 0 !important; margin: 0; border: 0; border-radius: 8px;
+    box-shadow: none !important; background: transparent;
 }
-.select-trigger-label > span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.el-input.select-input-group .refined-select { margin: 0 !important; height: 100%; max-width: 100%; }
+/* Element Plus input groups otherwise apply negative margins and erase select borders. */
+.el-input.select-input-group .refined-select .el-select__wrapper {
+    margin: 0 !important; height: 100%; border-radius: 8px !important;
+    box-shadow: 0 0 0 1px var(--el-border-color) inset !important;
+}
+.el-input.select-input-group .refined-select .el-select__wrapper:hover:not(.is-disabled) {
+    box-shadow: 0 0 0 1px var(--el-text-color-placeholder) inset !important;
+}
+.el-input.select-input-group .refined-select .el-select__wrapper.is-focused {
+    box-shadow: 0 0 0 1px var(--el-text-color-secondary) inset, 0 0 0 3px var(--el-fill-color) !important;
+}
+@media (max-width: 767px) {
+    .el-input.select-input-group { min-height: 44px; }
+    .select-input-group .refined-select { --refined-select-width: 144px; }
+    .select-input-group .refined-select--compact { --refined-select-width: 120px; }
 }

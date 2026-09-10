@@ -163,28 +163,17 @@
     </el-dialog>
     <el-dialog v-model="showAdd" :title="$t('addUser')">
       <div class="container">
-        <el-input v-model="addForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
+        <el-input class="select-input-group" v-model="addForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
           <template #append>
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  @visible-change="selectOpen = $event"
-                  v-model="addForm.suffix"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
-              <div class="select-trigger-label">
-                <span :title="addForm.suffix">{{ addForm.suffix }}</span>
-                <DropdownChevron :expanded="selectOpen"/>
-              </div>
-            </div>
+            <RefinedSelect v-model="addForm.suffix" :placeholder="$t('select')" :aria-label="$t('domain')" :title="addForm.suffix">
+              <el-option
+                v-for="item in domainList"
+                :key="item"
+                :label="item"
+                :value="item"
+                :title="item"
+              />
+            </RefinedSelect>
           </template>
         </el-input>
         <el-input type="password" v-model="addForm.password" :placeholder="$t('password')"/>
@@ -374,7 +363,7 @@
 </template>
 
 <script setup>
-import DropdownChevron from "@/components/dropdown-chevron/index.vue";
+import RefinedSelect from "@/components/refined-select/index.vue";
 import {defineOptions, h, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
 import {
   userList,
@@ -476,8 +465,6 @@ const pagerCount = ref(10)
 const settingLoading = ref(false)
 const tableLoading = ref(true)
 const roleList = reactive([])
-const selectOpen = ref(false)
-const mySelect = ref({})
 const accountList = reactive([])
 const accountParams = reactive({
   size: 10,
@@ -697,10 +684,6 @@ const tableRowFormatter = (data) => {
   return data.row.email
 }
 
-const openSelect = () => {
-  mySelect.value.focus()
-  mySelect.value.toggleMenu()
-}
 
 function resetAddForm() {
   addForm.email = ''
@@ -1245,13 +1228,6 @@ function adjustWidth() {
   }
 }
 
-.select {
-  position: absolute;
-  right: 30px;
-  width: 100px;
-  opacity: 0;
-  pointer-events: none;
-}
 
 .loading {
   position: absolute;
@@ -1291,11 +1267,6 @@ function adjustWidth() {
   background: var(--el-bg-color);
 }
 
-:deep(.el-input-group__append) {
-  padding: 0 !important;
-  padding-left: 8px !important;
-  background: var(--el-bg-color);
-}
 
 :deep(.cell) {
   white-space: normal;

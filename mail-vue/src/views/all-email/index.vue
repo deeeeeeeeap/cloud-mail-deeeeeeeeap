@@ -23,29 +23,17 @@
         <el-input
             v-model="searchValue"
             :placeholder="$t('searchByContent')"
-            class="search-input"
+            class="search-input select-input-group"
             @keyup.enter="search"
         >
-          <template #prefix>
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  @visible-change="selectOpen = $event"
-                  v-model="params.searchType"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option key="3" :label="$t('sender')" :value="'name'"/>
-                <el-option key="4" :label="$t('subject')" :value="'subject'"/>
-                <el-option key="1" :label="$t('user')" :value="'user'"/>
-                <el-option key="2" :label="$t('selectEmail')" :value="'account'"/>
-                <el-option key="5" :label="$t('searchByContent')" :value="'content'"/>
-              </el-select>
-              <div class="search-type select-trigger-label">
-                <span>{{ selectTitle }}</span>
-                <DropdownChevron :expanded="selectOpen"/>
-              </div>
-            </div>
+          <template #prepend>
+            <RefinedSelect v-model="params.searchType" :placeholder="$t('select')" :aria-label="$t('select')" compact>
+              <el-option key="3" :label="$t('sender')" :value="'name'"/>
+              <el-option key="4" :label="$t('subject')" :value="'subject'"/>
+              <el-option key="1" :label="$t('user')" :value="'user'"/>
+              <el-option key="2" :label="$t('selectEmail')" :value="'account'"/>
+              <el-option key="5" :label="$t('searchByContent')" :value="'content'"/>
+            </RefinedSelect>
           </template>
         </el-input>
         <el-select v-model="params.type" placeholder="Select" class="status-select" @change="typeSelectChange">
@@ -97,10 +85,10 @@
 </template>
 
 <script setup>
-import DropdownChevron from "@/components/dropdown-chevron/index.vue";
+import RefinedSelect from "@/components/refined-select/index.vue";
 import {starAdd, starCancel} from "@/request/star.js";
 import emailScroll from "@/components/email-scroll/index.vue"
-import {computed, defineOptions, reactive, ref, watch, onActivated, onDeactivated, onUnmounted} from "vue";
+import {defineOptions, reactive, ref, watch, onActivated, onDeactivated, onUnmounted} from "vue";
 import {useEmailStore} from "@/store/email.js";
 import {
   allEmailList,
@@ -129,15 +117,9 @@ const settingStore = useSettingStore();
 const clearTime = ref('')
 const sysEmailScroll = ref({})
 const searchValue = ref('')
-const selectOpen = ref(false)
-const mySelect = ref()
 const showBathDelete = ref(false)
 const clearLoading = ref(false)
 
-const openSelect = () => {
-  mySelect.value.focus()
-  mySelect.value.toggleMenu()
-}
 
 const params = reactive({
   timeSort: 0,
@@ -176,13 +158,6 @@ function closedClear() {
   clearTime.value = null
 }
 
-const selectTitle = computed(() => {
-  if (params.searchType === 'user') return t('user')
-  if (params.searchType === 'account') return t('selectEmail')
-  if (params.searchType === 'name') return t('sender')
-  if (params.searchType === 'subject') return t('subject')
-  if (params.searchType === 'content') return t('searchByContent')
-})
 
 const paramsStar = localStorage.getItem('all-email-params')
 if (paramsStar) {
@@ -437,17 +412,6 @@ async function latest(signal) {
   padding-bottom: 5px;
 }
 
-.select {
-  position: absolute;
-  width: 40px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.search-type {
-  display: flex;
-  color: var(--el-text-color-regular);
-}
 
 :deep(.header-actions) {
   padding-top: 8px;
@@ -456,8 +420,9 @@ async function latest(signal) {
 
 .search-input {
   width: 100%;
-  max-width: 280px;
-  height: 28px;
+  max-width: 380px;
+  height: 36px;
+  min-width: 0;
 }
 
 .clear-email {
