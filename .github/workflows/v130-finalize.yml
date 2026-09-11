@@ -1,0 +1,40 @@
+name: Apply verified v1.3.0 source
+on:
+  push:
+    branches: [codex/storage-domain-v1.3.0-20260910]
+    paths: ['.v130-transfer/**']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/codex/storage-domain-v1.3.0-20260910'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify patch and final tree (review branch only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, gzip, hashlib, pathlib, subprocess
+          parts = sorted(pathlib.Path('.v130-transfer').glob('*.part'))
+          assert len(parts) == 5
+          patch = gzip.decompress(base64.b64decode(''.join(p.read_text() for p in parts), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'fa1e63cd8848071a221175f3c1445d9bacdbb4b61ec356fe60aa94e4cd25fa21'
+          path = pathlib.Path('/tmp/v130-final.patch')
+          path.write_bytes(patch)
+          subprocess.run(['git', 'apply', '--index', '--check', str(path)], check=True)
+          subprocess.run(['git', 'apply', '--index', str(path)], check=True)
+          subprocess.run(['git', 'rm', '-r', '.v130-transfer', '.github/workflows/v130-finalize.yml', '.github/workflows/v130-workspace.yml'], check=True)
+          tree = subprocess.check_output(['git', 'write-tree'], text=True).strip()
+          assert tree == '6505e59a0a054e18a79e0ae0812c6fbbe8d60cbf', tree
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+          print('Verified complete final tree:', tree)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: finish refresh and storage UX and prepare verified v1.3.0 release'
+          git push origin HEAD:refs/heads/codex/storage-domain-v1.3.0-20260910
