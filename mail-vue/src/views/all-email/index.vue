@@ -31,7 +31,7 @@
           <el-option key="3" :label="$t('received')" value="receive"/>
           <el-option key="2" :label="$t('sent')" value="send"/>
           <el-option key="4" :label="$t('selectDeleted')" value="delete"/>
-          <el-option key="4" :label="$t('noRecipientTitle')" value="noone"/>
+          <el-option key="noone" :label="$t('noRecipientTitle')" value="noone"/>
         </el-select>
       </template>
       <template #actions>

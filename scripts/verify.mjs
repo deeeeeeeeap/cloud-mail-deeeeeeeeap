@@ -24,7 +24,7 @@ const steps = [
     id: 'release-config-tests',
     cwd: repoRoot,
     command: process.execPath,
-    args: ['--test', join('scripts', 'verify-release.test.mjs')]
+    args: ['--test', join('scripts', 'verify-release.test.mjs'), join('scripts', 'publish-v130.test.mjs')]
   },
   {
     id: 'worker-tests',

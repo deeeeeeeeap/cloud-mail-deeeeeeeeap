@@ -16,8 +16,8 @@
         <span class="wait-dot" :class="{checking}" aria-hidden="true"></span>{{ waiting ? $t('ux.codeStopWait') : $t('ux.codeWait') }}
       </button>
       <button class="refresh-button" type="button" :aria-label="$t('refreshList')" :title="$t('refreshList')"
-        :disabled="loading || loadingMore" @click="refresh">
-        <Icon icon="cloud-mail:refresh" width="20" height="20" aria-hidden="true" />
+        :disabled="loading || loadingMore" :aria-busy="loading || loadingMore" @click="refresh">
+        <RefreshListIcon :spinning="loading || loadingMore" />
       </button>
     </form>
 
@@ -90,6 +90,7 @@
 <script setup>
 import {computed, defineOptions, onBeforeUnmount, reactive, ref, watch} from "vue";
 import {Icon} from "@iconify/vue";
+import RefreshListIcon from "@/components/refresh-list-icon/index.vue";
 import {ElMessage} from "element-plus";
 import router from "@/router/index.js";
 import {createVisiblePoller} from '@/utils/visible-poller.js';
@@ -358,15 +359,24 @@ getList(true)
 .search-input { flex: 1; min-width: 0; max-width: 600px; }
 .status-select { width: 172px; flex: 0 0 172px; }
 .code-toolbar :deep(.el-input__wrapper), .code-toolbar :deep(.el-select__wrapper) { min-height: 40px; }
-.refresh-button { height: 40px; margin: 0; }
 .input-search { min-width: 44px; min-height: 40px; padding: 4px 10px; color: var(--el-text-color-regular); cursor: pointer; }
 .search-input :deep(.el-input-group__append) { padding: 0; background: var(--extra-light-fill); }
 .last-check { margin-left: auto; font-size: 12px; color: var(--el-text-color-secondary); }
 .waiting-status { padding: 6px 24px; font-size: 12px; color: var(--el-text-color-secondary); }
 .help-mark { display: none; }
-.refresh-button { display: grid; place-items: center; width: 40px; flex-shrink: 0; color: var(--el-text-color-regular); border-radius: var(--radius-md); cursor: pointer; }
-.refresh-button:hover { background: var(--el-fill-color-light); }
-.refresh-button:disabled { opacity: .45; cursor: wait; }
+.refresh-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; flex-shrink: 0; margin: 0; padding: 0;
+  border: 1px solid var(--el-border-color-light); border-radius: 9px;
+  background: var(--el-bg-color); color: var(--el-text-color-regular); cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.refresh-button:hover:not(:disabled) {
+  background: var(--el-fill-color-light); border-color: var(--el-border-color);
+}
+.refresh-button:focus-visible { outline: 2px solid var(--el-text-color-secondary); outline-offset: 3px; }
+.refresh-button:disabled { opacity: .65; cursor: wait; }
+@media (prefers-reduced-motion: reduce) { .refresh-button { transition: none; } }
 .code-subnav { padding: 0 24px 10px; border-bottom: 1px solid var(--el-border-color-lighter); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .scope-tabs { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--extra-light-fill); border: 1px solid var(--el-border-color-lighter); border-radius: 10px; padding: 3px; }
 .scope-tabs button { padding: 8px 12px; min-height: 38px; border-radius: 7px; color: var(--el-text-color-secondary); cursor: pointer; }
@@ -410,7 +420,7 @@ getList(true)
   .code-toolbar :deep(.el-input__wrapper), .code-toolbar :deep(.el-select__wrapper) { min-height: 44px; }
   .code-toolbar :deep(input) { font-size: 16px; }
   .input-search, .refresh-button { min-height: 44px; }
-  .refresh-button { width: 44px; grid-column: 3; }
+  .refresh-button { width: 44px; height: 44px; grid-column: 3; }
   .wait-button { grid-column: 2; margin: 0; }
   .last-check, .help-label { display: none; }
   .help-mark { display: inline; }
