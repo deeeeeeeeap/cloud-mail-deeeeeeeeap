@@ -36,3 +36,25 @@ jobs:
 
       - name: Install and verify release
         run: node scripts/cloudflare-workers-git-build.mjs
+
+  # v1.3.0 only: tests/build stay read-only; publication gets a separate runner.
+  publish-v130:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'deeeeeeeeap/cloud-mail-deeeeeeeeap'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the exact verified commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Publish v1.3.0 once, without rewriting existing releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/publish-v130.mjs

@@ -197,23 +197,42 @@
           <div class="settings-card">
             <div class="card-title">{{ $t('oss') }}</div>
             <div class="card-content">
-              <div class="r2domain-item">
-                <div>
-                  <span>{{ $t('osDomain') }}</span>
-                  <el-tooltip effect="dark" :content="$t('ossDomainDesc')">
-                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
-                  </el-tooltip>
+              <div class="storage-domain-setting">
+                <div class="storage-domain-header">
+                  <div class="storage-domain-label">
+                    <span>{{ $t('osDomain') }}</span>
+                    <el-tooltip effect="dark" :content="$t('ossDomainDesc')" :trigger="['hover', 'focus']">
+                      <button class="storage-domain-help" type="button" :aria-label="$t('ossDomainDesc')">
+                        <Icon icon="fe:warning" width="16" height="16" aria-hidden="true"/>
+                      </button>
+                    </el-tooltip>
+                  </div>
+                  <el-button class="opt-button storage-domain-edit" size="small" type="primary" plain
+                             :disabled="settingLoading || !settingReady" @click="openR2Domain">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                      <path d="m15 5 4 4M4 20l4-1L20 7a2.83 2.83 0 0 0-4-4L4 15v5Z"
+                            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>{{ $t('editSetting') }}</span>
+                  </el-button>
                 </div>
-                <div class="r2domain">
-                  <span>{{ setting.r2Domain || '' }}</span>
-                  <el-button class="opt-button" size="small" type="primary" plain @click="r2DomainShow = true">{{ $t('editSetting') }}</el-button>
+                <div class="storage-domain-value" :class="{'is-empty': !setting.r2Domain}">
+                  <svg class="storage-domain-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                       aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M3 12h18M12 3c4 4.5 4 13.5 0 18-4-4.5-4-13.5 0-18Z"
+                          stroke="currentColor" stroke-width="1.5"/>
+                  </svg>
+                  <span class="storage-domain-text" dir="ltr" :title="setting.r2Domain || $t('notConfigured')">
+                    {{ setting.r2Domain || $t('notConfigured') }}
+                  </span>
                 </div>
               </div>
               <div class="setting-item">
                 <div>
                   <span>{{ $t('s3Configuration') }}</span>
                 </div>
-                <div class="r2domain">
+                <div>
                   <el-button class="opt-button" size="small" type="primary" plain @click="addS3Show = true">{{ $t('configureSetting') }}</el-button>
                 </div>
               </div>
@@ -221,10 +240,8 @@
                 <div>
                   <span>{{ $t('storageType') }}</span>
                 </div>
-                <div class="r2domain">
-                  <div class="storage-type">
-                    <el-tag>{{ setting.storageType }}</el-tag>
-                  </div>
+                <div>
+                  <el-tag>{{ setting.storageType }}</el-tag>
                 </div>
               </div>
             </div>
@@ -272,9 +289,9 @@
                       placeholder="Select"
                       class="bot-verify-select"
                   >
-                    <el-option key="1" :value="0" :label="$t('enable')"/>
-                    <el-option key="1" :value="1" :label="$t('disable')"/>
-                    <el-option key="1" :value="2" :label="$t('rulesVerify')"/>
+                    <el-option key="enable" :value="0" :label="$t('enable')"/>
+                    <el-option key="disable" :value="1" :label="$t('disable')"/>
+                    <el-option key="rules" :value="2" :label="$t('rulesVerify')"/>
                   </el-select>
                 </div>
               </div>
@@ -289,9 +306,9 @@
                       placeholder="Select"
                       class="bot-verify-select"
                   >
-                    <el-option key="1" :value="0" :label="$t('enable')"/>
-                    <el-option key="1" :value="1" :label="$t('disable')"/>
-                    <el-option key="1" :value="2" :label="$t('rulesVerify')"/>
+                    <el-option key="enable" :value="0" :label="$t('enable')"/>
+                    <el-option key="disable" :value="1" :label="$t('disable')"/>
+                    <el-option key="rules" :value="2" :label="$t('rulesVerify')"/>
                   </el-select>
                 </div>
               </div>
@@ -384,13 +401,13 @@
 
       <!-- Dialogs remain the same -->
       <el-dialog v-model="editTitleShow" :title="$t('changeTitle')" width="340" @closed="editTitle = setting.title">
-        <form>
+        <form @submit.prevent>
           <el-input type="text" :placeholder="$t('websiteTitle')" v-model="editTitle"/>
           <el-button type="primary" :loading="settingLoading" @click="saveTitle">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
       <el-dialog v-model="resendTokenFormShow" :title="$t('resendToken')" width="340" @closed="cleanResendTokenForm">
-        <form>
+        <form @submit.prevent>
           <el-select style="margin-bottom: 15px" v-model="resendTokenForm.domain" placeholder="Select">
             <el-option
                 v-for="item in settingStore.domainList"
@@ -405,14 +422,16 @@
       </el-dialog>
       <el-dialog v-model="r2DomainShow" :title="$t('addOsDomain')" width="340"
                  @closed="r2DomainInput = setting.r2Domain">
-        <form>
-          <el-input type="text" :placeholder="$t('domainDesc')" v-model="r2DomainInput"/>
-          <el-button type="primary" :loading="settingLoading" @click="saveR2domain">{{ $t('save') }}</el-button>
+        <form @submit.prevent="saveR2domain">
+          <p class="dialog-tip">{{ $t('ossDomainDesc') }}</p>
+          <el-input type="text" :placeholder="$t('domainDesc')" :aria-label="$t('osDomain')"
+                    autocomplete="off" :spellcheck="false" :disabled="settingLoading" v-model="r2DomainInput"/>
+          <el-button native-type="submit" type="primary" :loading="settingLoading">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
       <el-dialog v-model="turnstileShow" :title="$t('addTurnstileSecret')" width="340"
                  @closed="turnstileForm.secretKey = '';turnstileForm.siteKey = ''">
-        <form>
+        <form @submit.prevent>
           <div class="dialog-tip">{{ $t('turnstileBlankUnchanged') }}</div>
           <el-input type="text" :placeholder="`Site Key - ${$t('turnstileBlankUnchanged')}`" v-model="turnstileForm.siteKey"/>
           <el-input type="text" style="margin-top: 15px" :placeholder="`Secret Key - ${$t('turnstileBlankUnchanged')}`" v-model="turnstileForm.secretKey"/>
@@ -588,7 +607,7 @@
       </el-dialog>
       <el-dialog v-model="regVerifyCountShow" :title="$t('rulesVerifyTitle',{count: regVerifyCount})"
                  @closed="regVerifyCount = setting.regVerifyCount">
-        <form>
+        <form @submit.prevent>
           <el-input-number type="text" v-model="regVerifyCount" :min="1">
           </el-input-number>
           <el-button type="primary" :loading="settingLoading" @click="saveRegVerifyCount">{{ $t('save') }}</el-button>
@@ -596,14 +615,14 @@
       </el-dialog>
       <el-dialog v-model="addVerifyCountShow" :title="$t('rulesVerifyTitle',{count: addVerifyCount})"
                  @closed="addVerifyCount = setting.addVerifyCount">
-        <form>
+        <form @submit.prevent>
           <el-input-number type="text" v-model="addVerifyCount" :min="1"/>
           <el-button type="primary" :loading="settingLoading" @click="saveAddVerifyCount">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
       <el-dialog top="5vh" v-model="noticePopupShow" :title="$t('noticePopup')" class="notice-popup"
                  @closed="resetNoticeForm">
-        <form>
+        <form @submit.prevent>
           <el-input v-model="noticeForm.noticeTitle" :placeholder="t('titleDesc')"/>
           <div class="notice-line-item">
             <el-select v-model="noticeForm.noticeType">
@@ -675,7 +694,7 @@
         </template>
       </el-dialog>
       <el-dialog v-model="addS3Show" :title="t('s3Configuration')" width="340" @closed="resetAddS3Form">
-        <form>
+        <form @submit.prevent>
           <el-input class="dialog-input" type="text" placeholder="Bucket" v-model="s3.bucket"/>
           <el-input class="dialog-input" type="text" placeholder="Endpoint" v-model="s3.endpoint"/>
           <el-input class="dialog-input" type="text" placeholder="Region" v-model="s3.region"/>
@@ -722,7 +741,7 @@
             </el-tooltip>
           </div>
         </template>
-        <el-form>
+        <el-form @submit.prevent>
           <el-form-item :label="t('blackFromDesc')" label-position="top">
             <el-input-tag v-model="blackListForm.blackFrom" @add-tag="banEmailAddTag"  />
           </el-form-item>
@@ -744,7 +763,7 @@
             </el-tooltip>
           </div>
         </template>
-        <el-form>
+        <el-form @submit.prevent>
           <el-form-item :label="t('senderRules')" label-position="top">
             <el-input-tag v-model="aiCodeFilter" @add-tag="aiCodeFilterAddTag"/>
           </el-form-item>
@@ -777,13 +796,15 @@ import {
 } from "@/utils/background-image.js";
 import {useI18n} from 'vue-i18n';
 import axios from "axios";
+import packageInfo from "../../../package.json";
+import {isNewerStableRelease} from "@/utils/release-version.js";
 
 defineOptions({
   name: 'sys-setting'
 })
 
 // 本项目自 3.0.0 从上游分叉后独立维护，版本号另起一条线，不跟随上游编号
-const currentVersion = 'v1.2.6'
+const currentVersion = `v${packageInfo.version}`
 const projectRepo = 'https://github.com/deeeeeeeeap/cloud-mail-deeeeeeeeap'
 // 文件名是中文，走 GitHub blob 链接必须用百分号编码，否则部分客户端拼不出正确地址
 const projectDoc = projectRepo + '/blob/main/doc/%E9%83%A8%E7%BD%B2%E6%95%99%E7%A8%8B.md'
@@ -988,7 +1009,7 @@ function getUpdate() {
   axios.get(releaseApi).then(({data}) => {
     // release 标题可以留空，tag 一定有，优先用 tag
     const latest = data.tag_name || data.name
-    hasUpdate.value = !!latest && latest !== currentVersion
+    hasUpdate.value = isNewerStableRelease(latest, currentVersion)
     getUpdateErrorCount = 0
   }).catch(e => {
     // 一个 release 都没发过时 GitHub 返回 404。这是确定答案而非请求失败，
@@ -1450,8 +1471,14 @@ function openCut() {
   doc.click()
 }
 
+function openR2Domain() {
+  if (settingLoading.value || !settingReady.value) return
+  r2DomainInput.value = setting.value.r2Domain || ''
+  r2DomainShow.value = true
+}
+
 function saveR2domain() {
-  const settingForm = {r2Domain: r2DomainInput.value}
+  const settingForm = {r2Domain: r2DomainInput.value.trim()}
   editSetting(settingForm)
 }
 
@@ -1637,6 +1664,7 @@ function editSetting(settingForm, refreshStatus = true) {
 }
 
 .settings-card {
+  min-width: 0;
   background-color: var(--el-bg-color);
   border-radius: var(--radius-lg);
   border: 1px solid var(--el-border-color-light);
@@ -1690,19 +1718,70 @@ function editSetting(settingForm, refreshStatus = true) {
   }
 }
 
-.r2domain-item {
-  display: flex;
-  gap: 10px;
-  > div:first-child {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
 
-  > div:last-child {
-    flex: 1;
-    text-align: right;
-  }
+/* The domain owns its layout: no button-margin dependency or generic row override. */
+.storage-domain-setting {
+  min-width: 0;
+  padding: 2px 0 16px;
+}
+.storage-domain-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.storage-domain-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.storage-domain-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  min-height: 28px;
+  padding: 4px;
+  border-radius: 6px;
+  color: var(--el-text-color-secondary);
+  cursor: help;
+}
+.storage-domain-help:hover { background: var(--el-fill-color-light); }
+.storage-domain-help:focus-visible {
+  outline: 2px solid var(--el-text-color-secondary);
+  outline-offset: 2px;
+}
+.storage-domain-edit :deep(> span) { display: inline-flex; align-items: center; gap: 6px; }
+.storage-domain-value {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+  color: var(--el-text-color-primary);
+}
+.storage-domain-icon { flex: 0 0 18px; margin-top: 1px; color: var(--el-text-color-secondary); }
+.storage-domain-text {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.storage-domain-value.is-empty { color: var(--el-text-color-secondary); }
+.storage-domain-setting + .setting-item { border-top: 1px solid var(--el-border-color-lighter); }
+@media (pointer: coarse) {
+  .storage-domain-help { flex-basis: 44px; min-height: 44px; }
+  .settings-card .storage-domain-edit { min-height: 44px; }
 }
 
 .title-icon.warning {
@@ -1935,26 +2014,6 @@ function editSetting(settingForm, refreshStatus = true) {
   }
 }
 
-.r2domain {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-
-  .storage-type {
-    margin-right: 3px;
-  }
-
-  span {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  .el-button {
-    width: 48px;
-    margin: 0 0 0 10px;
-  }
-}
 
 .personalized {
   align-items: start;
