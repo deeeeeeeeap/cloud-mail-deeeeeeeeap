@@ -319,32 +319,35 @@ const loginService = {
 			? null
 			: await authRateLimitService.assertAllowed(c, 'login', email);
 
-		const userRow = await userService.selectByEmailIncludeDel(c, email);
-
-		// 这两条不做口令校验就返回，比「密码错误」少一整轮 PBKDF2；
-		// 统一文案挡不住这个时间差，补一次等价开销把耗时抹平
-		if (!userRow || userRow.isDel === isDel.DELETE) {
+		let userRow;
+		try {
+			userRow = await userService.selectByEmailIncludeDel(c, email);
+			// 不存在的账号仍付出同等密码验证开销，避免暴露账号是否存在。
+			if (!userRow || userRow.isDel === isDel.DELETE) {
+				if (!noVerifyPwd) await cryptoUtils.burnPasswordVerification(password);
+				throw markAuthAbuse(new BizError(t('loginFailed')));
+			}
 			if (!noVerifyPwd) {
-				await cryptoUtils.burnPasswordVerification(password);
+				if (!await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password)) {
+					throw markAuthAbuse(new BizError(t('loginFailed')));
+				}
+				const currentUserRow = await userService.upgradePasswordHash(c, userRow, password);
+				if (!currentUserRow) throw markAuthAbuse(new BizError(t('loginFailed')));
+				Object.assign(userRow, currentUserRow);
+				await authRateLimitService.clear(c, rateIdentity);
 			}
-			if (rateIdentity) await authRateLimitService.recordFailure(c, rateIdentity);
-			throw new BizError(t('loginFailed'));
-		}
-
-		if (!noVerifyPwd) {
-			if (!await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password)) {
-				if (rateIdentity) await authRateLimitService.recordFailure(c, rateIdentity);
-				throw new BizError(t('loginFailed'));
+		} catch (error) {
+			if (rateIdentity && error?.authAbuse) {
+				// recordFailure 已消费名额，即使抛 429 也不能再次归还同代其他请求的名额。
+				await authRateLimitService.recordFailure(c, rateIdentity);
+			} else if (rateIdentity) {
+				try {
+					await authRateLimitService.releaseReservation(c, rateIdentity);
+				} catch {
+					console.warn('login rate-limit reservation release failed');
+				}
 			}
-
-			const currentUserRow = await userService.upgradePasswordHash(c, userRow, password);
-			if (!currentUserRow) {
-				if (rateIdentity) await authRateLimitService.recordFailure(c, rateIdentity);
-				throw new BizError(t('loginFailed'));
-			}
-			Object.assign(userRow, currentUserRow);
-
-			await authRateLimitService.clear(c, rateIdentity);
+			throw error;
 		}
 
 		if (userRow.status === userConst.status.BAN) {

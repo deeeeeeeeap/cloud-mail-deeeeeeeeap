@@ -506,6 +506,7 @@ const zhTw = {
     bindEmailMsg: '請註冊繫結一個信箱',
     trustLevel: '等級',
     loginLoading: '登入中...',
+    loginRetryMsg: '登入驗證已通過，但帳號資訊載入失敗。請重試，無需重新輸入密碼。',
     oauthFlowInvalidMsg: 'LinuxDo 登入驗證已失效，請重新發起登入'
 }
 export default zhTw

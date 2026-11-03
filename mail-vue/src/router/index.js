@@ -2,6 +2,7 @@ import {createRouter, createWebHistory} from 'vue-router'
 import NProgress from 'nprogress';
 import {useUiStore} from "@/store/ui.js";
 import {useSettingStore} from "@/store/setting.js";
+import {useUserStore} from "@/store/user.js";
 import {resolveRouteNavigation} from "@/router/route-navigation.js";
 
 const routes = [
@@ -112,6 +113,7 @@ router.beforeEach((to, from, next) => {
     const settingStore = useSettingStore()
     const decision = resolveRouteNavigation({
         token,
+        sessionReady: !!useUserStore().user?.userId,
         toName: to.name,
         fromPath: from.path,
         setupRequired: settingStore.settings?.ready === false

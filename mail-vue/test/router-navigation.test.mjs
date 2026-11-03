@@ -24,8 +24,18 @@ test('setup and authenticated login redirects keep their existing behavior', () 
 
   assert.deepEqual(resolveRouteNavigation({
     token: 'token',
+    sessionReady: true,
     toName: 'login',
     fromPath: '/inbox',
     setupRequired: false
   }), { type: 'redirect', to: '/inbox' })
+})
+
+test('a pending login stays on the login page and cannot enter the inbox', () => {
+  assert.deepEqual(resolveRouteNavigation({
+    token: 'pending', sessionReady: false, toName: 'login', fromPath: '/', setupRequired: false
+  }), { type: 'allow' })
+  assert.deepEqual(resolveRouteNavigation({
+    token: 'pending', sessionReady: false, toName: 'email', fromPath: '/login', setupRequired: false
+  }), { type: 'redirect', to: { name: 'login' } })
 })

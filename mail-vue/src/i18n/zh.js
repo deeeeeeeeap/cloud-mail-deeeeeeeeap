@@ -506,6 +506,7 @@ const zh = {
     bindEmailMsg: '请注册绑定一个邮箱',
     trustLevel: '等级',
     loginLoading: '登录中...',
+    loginRetryMsg: '登录验证已通过，但账号信息加载失败。请重试，无需重新输入密码。',
     oauthFlowInvalidMsg: 'LinuxDo 登录验证已失效，请重新发起登录'
 }
 export default zh

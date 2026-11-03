@@ -26,6 +26,13 @@ export function classifyHttpError(error) {
   if (status === 403) {
     return { kind: 'edge-forbidden', payload: null }
   }
+  // 501 是旧版业务码；其余 5xx 仅展示 Worker 明确标记的业务错误。
+  if (payload?.code >= 400 && payload.code <= 599 && (
+    payload.code < 500 || payload.code === 501
+    || error.response?.headers?.['x-cloud-mail-error'] === 'business'
+  )) {
+    return { kind: 'business', payload }
+  }
   return { kind: 'other', payload }
 }
 

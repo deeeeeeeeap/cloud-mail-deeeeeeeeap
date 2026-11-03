@@ -5,6 +5,8 @@ import { t } from '../i18n/i18n';
 export const AUTH_FAILURE_LIMIT = 5;
 export const AUTH_FAILURE_WINDOW_SECONDS = 10 * 60;
 export const AUTH_LOCK_SECONDS = 5 * 60;
+export const LOGIN_FAILURE_LIMIT = 15;
+export const LOGIN_LOCK_SECONDS = 60;
 export const AUTH_RESERVATION_SECONDS = 30;
 
 const encoder = new TextEncoder();
@@ -133,7 +135,7 @@ const authRateLimitService = {
 				resetBefore,
 				staleBefore,
 				candidateGeneration,
-				AUTH_FAILURE_LIMIT,
+				scope === 'login' ? LOGIN_FAILURE_LIMIT : AUTH_FAILURE_LIMIT,
 				scope,
 				hash
 			)
@@ -177,8 +179,8 @@ const authRateLimitService = {
 				  AND in_flight > 0
 				RETURNING fail_count AS failCount, lock_until AS lockUntil
 			`).bind(
-				AUTH_FAILURE_LIMIT,
-				now + AUTH_LOCK_SECONDS,
+				identity.scope === 'login' ? LOGIN_FAILURE_LIMIT : AUTH_FAILURE_LIMIT,
+				now + (identity.scope === 'login' ? LOGIN_LOCK_SECONDS : AUTH_LOCK_SECONDS),
 				now,
 				identity.scope,
 				identity.identityHash,

@@ -30,6 +30,7 @@ app.onError((err, c) => {
 	if (err.name === 'BizError') {
 		console.warn(err.message);
 		const status = toHttpErrorStatus(err.code);
+		c.header('X-Cloud-Mail-Error', 'business');
 		return c.json(result.fail(err.message, err.code), status);
 	} else {
 		console.error(err);
@@ -76,6 +77,7 @@ function setCorsHeaders(c, origin) {
 	c.header('Access-Control-Allow-Origin', origin);
 	c.header('Access-Control-Allow-Credentials', 'true');
 	c.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept-Language');
+	c.header('Access-Control-Expose-Headers', 'X-Cloud-Mail-Error');
 	c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
 	c.header('Access-Control-Max-Age', '86400');
 	c.header('Vary', 'Origin');

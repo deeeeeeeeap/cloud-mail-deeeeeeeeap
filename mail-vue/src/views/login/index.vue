@@ -11,7 +11,12 @@
         <span class="form-title">{{ settingStore.settings.title }}</span>
         <span class="form-desc" v-if="show === 'login'">{{ $t('loginTitle') }}</span>
         <span class="form-desc" v-else>{{ $t('regTitle') }}</span>
-        <div v-show="show === 'login'">
+        <div v-if="pendingLogin" role="status" aria-live="polite">
+          <p class="login-retry-message">{{ $t('loginRetryMsg') }}</p>
+          <el-button class="btn" type="primary" :loading="loginLoading" @click="retryLogin">{{ $t('retry') }}</el-button>
+          <el-button class="btn" :disabled="loginLoading" @click="cancelLogin">{{ $t('cancel') }}</el-button>
+        </div>
+        <div v-show="!pendingLogin && show === 'login'">
           <el-input :class="{'mail-address-field': !hideLoginDomain}" v-model="form.email"
                     type="text" :placeholder="$t('emailAccount')" autocomplete="off">
             <template #append v-if="!hideLoginDomain">
@@ -28,7 +33,7 @@
             <el-avatar src="/image/linuxdo.webp" :size="18" style="margin-right: 10px" />LinuxDo
           </el-button>
         </div>
-        <div v-show="show !== 'login'">
+        <div v-show="!pendingLogin && show !== 'login'">
           <el-input :class="{'mail-address-field': !hideLoginDomain}" v-model="registerForm.email" type="text" :placeholder="$t('emailAccount')"
                     autocomplete="off">
             <template #append v-if="!hideLoginDomain">
@@ -59,7 +64,7 @@
             <el-avatar src="/image/linuxdo.webp" :size="18" style="margin-right: 10px" />LinuxDo
           </el-button>
         </div>
-        <template v-if="settingStore.settings.register === 0">
+        <template v-if="!pendingLogin && settingStore.settings.register === 0">
           <button type="button" class="switch" @click="show = 'register'" v-if="show === 'login'">{{ $t('noAccount') }}
             <span>{{ $t('regSwitch') }}</span>
           </button>
@@ -117,9 +122,11 @@ import {
 } from "@/views/login/oauth-flow.js";
 import {
   clearAuthSession,
+  getSessionGeneration,
   installDynamicRoutes,
   startAuthSession
 } from "@/session/auth-session.js";
+import {initializeAuthenticatedSession} from "@/init/auth-bootstrap.js";
 import {queueLoginBackground} from "@/views/login/login-background.js";
 import {consumePrefetchLoginBackground} from "@/views/login/login-background-prefetch.js";
 
@@ -131,6 +138,7 @@ const settingStore = useSettingStore();
 const loginLoading = ref(false)
 const bindLoading = ref(false)
 const oauthLoading = ref(false);
+const pendingLogin = ref(null);
 const showBindForm = ref(false);
 const show = ref('login')
 
@@ -425,27 +433,72 @@ const submit = () => {
 }
 
 async function saveToken(token) {
+  pendingLogin.value = null
+  showBindForm.value = false
   startAuthSession(token)
-  refreshWebsiteConfig()
+  return finishLogin({token, sessionGeneration: getSessionGeneration()})
+}
+
+function isCurrentLogin(session) {
+  return localStorage.getItem('token') === session.token
+    && getSessionGeneration() === session.sessionGeneration
+}
+
+async function finishLogin(session) {
   try {
-    const user = await loginUserInfo();
-    accountStore.currentAccountId = user.account.accountId;
-    accountStore.currentAccount = user.account;
-    userStore.user = user;
-    const routers = permsToRouter(user.permKeys);
-    installDynamicRoutes(router, routers);
-    await router.replace({name: 'layout'})
-  } catch (e) {
-    // 用户信息拉取失败则不能保留登录态，否则后续进入主界面会因空用户信息崩溃
-    if (localStorage.getItem('token')) {
-      await clearAuthSession({redirect: false})
+    const outcome = await initializeAuthenticatedSession({
+      ...session,
+      loadUser: loginUserInfo,
+      getToken: () => localStorage.getItem('token'),
+      getCurrentGeneration: getSessionGeneration,
+      clearSession: clearAuthSession,
+      applyUser: user => {
+        accountStore.currentAccountId = user.account.accountId
+        accountStore.currentAccount = user.account
+        userStore.user = user
+        installDynamicRoutes(router, permsToRouter(user.permKeys))
+      }
+    })
+    if (outcome.kind !== 'authenticated') {
+      if (!localStorage.getItem('token')) pendingLogin.value = null
+      return
     }
+    pendingLogin.value = null
+    refreshWebsiteConfig()
+    await router.replace({name: 'layout'})
+    uiStore.showNotice()
+  } catch (e) {
+    if (isCurrentLogin(session)) pendingLogin.value = session
     throw e
   } finally {
-    oauthLoading.value = false;
-    bindLoading.value = false;
+    if (isCurrentLogin(session) || !localStorage.getItem('token')) {
+      oauthLoading.value = false
+      bindLoading.value = false
+    }
   }
-  uiStore.showNotice()
+}
+
+async function retryLogin() {
+  const session = pendingLogin.value
+  if (loginLoading.value || !session) return
+  if (!isCurrentLogin(session)) {
+    pendingLogin.value = null
+    return
+  }
+  loginLoading.value = true
+  try {
+    await finishLogin(session)
+  } catch {
+    // HTTP 层已显示错误；保留同一会话供用户重试，不再提交密码。
+  } finally {
+    loginLoading.value = false
+  }
+}
+
+async function cancelLogin() {
+  const session = pendingLogin.value
+  pendingLogin.value = null
+  if (session && isCurrentLogin(session)) await clearAuthSession({redirect: false})
 }
 
 function refreshWebsiteConfig() {
@@ -591,6 +644,12 @@ function submitRegister() {
 
 
 <style>
+.login-retry-message {
+  margin: 0 0 16px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
+}
+
 .el-select-dropdown__item {
   padding: 0 15px;
 }

@@ -1,6 +1,7 @@
 const zh = {
 	IncorrectPwd: '密码输入错误',
 	loginFailed: '邮箱或密码输入错误',
+	serviceUnavailable: '服务暂时不可用，请稍后重试',
 	authTooManyFailures: '登录失败次数过多，请稍后重试',
 	oauthTooManyAuthorizations: 'OAuth 登录请求过于频繁，请稍后重试',
 	addAccountDisabled: '添加邮箱功能已关闭',

@@ -160,9 +160,21 @@ describe('bootstrap readiness performance', () => {
 
 		const failedDb = createReadyDb({ failBatch: true });
 		const failedContext = context(failedDb);
-		await getBootstrapStatus(failedContext);
-		await getBootstrapStatus(failedContext);
+		await expect(getBootstrapStatus(failedContext)).rejects.toMatchObject({ code: 503 });
+		await expect(getBootstrapStatus(failedContext)).rejects.toMatchObject({ code: 503 });
 		expect(failedDb.metrics.batchCalls).toBe(2);
+	});
+
+	it('retries a failed check even when pending-status caching is requested', async () => {
+		const db = createReadyDb();
+		const batch = db.batch;
+		let failed = false;
+		db.batch = async function (statements) {
+			if (!failed) { failed = true; throw new Error('temporary failure'); }
+			return batch.call(this, statements);
+		};
+		await expect(getBootstrapStatus(context(db), { cachePending: true })).rejects.toMatchObject({ code: 503 });
+		expect((await getBootstrapStatus(context(db), { cachePending: true })).ready).toBe(true);
 	});
 
 	it('explicit invalidation forces the next ready check back to D1', async () => {

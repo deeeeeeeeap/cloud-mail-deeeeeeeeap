@@ -1,5 +1,7 @@
 import { isDel, userConst } from '../const/entity-const';
 import constant from '../const/constant';
+import BizError from '../error/biz-error';
+import { t } from '../i18n/i18n';
 
 const REQUIRED_TABLES = [
 	'email_search',
@@ -249,6 +251,7 @@ async function computeBootstrapStatus(c) {
 			}
 		} catch (error) {
 			console.warn(`Unable to check database initialization status: ${error.message}`);
+			throw new BizError(t('serviceUnavailable'), 503);
 		}
 	}
 

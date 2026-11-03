@@ -3,6 +3,23 @@ import { describe, expect, it } from 'vitest';
 import worker from '../src';
 
 describe('first deployment bootstrap', () => {
+	it('returns a retryable error instead of setup instructions when D1 cannot be checked', async () => {
+		const faultDb = {
+			prepare() { return { bind() { return this; } }; },
+			async batch() { throw new Error('private database failure details'); }
+		};
+		for (const path of ['/init/status', '/setting/websiteConfig']) {
+			const ctx = createExecutionContext();
+			const response = await worker.fetch(new Request(`http://example.com/api${path}`), { db: faultDb }, ctx);
+			await waitOnExecutionContext(ctx);
+			expect(response.status).toBe(503);
+			const body = await response.json();
+			expect(body.code).toBe(503);
+			expect(body.data).toBeUndefined();
+			expect(JSON.stringify(body)).not.toContain('private database');
+		}
+	});
+
 	it('reports missing bindings and variables without throwing', async () => {
 		const request = new Request('http://example.com/api/init/status');
 		const ctx = createExecutionContext();

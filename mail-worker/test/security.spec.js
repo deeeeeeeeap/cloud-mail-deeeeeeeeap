@@ -12,8 +12,21 @@ const encoder = new TextEncoder();
 app.get('/login/test-unknown-error', () => {
 	throw new Error('sensitive internal failure details');
 });
+app.get('/login/test-business-error', () => {
+	throw new BizError('Delivery outcome is unknown; do not retry automatically', 502);
+});
 
 describe('security hardening', () => {
+	it('marks deliberate business errors for the frontend without marking unknown failures', async () => {
+		const ctx = createExecutionContext();
+		const response = await worker.fetch(new Request('http://example.com/api/login/test-business-error', {
+			headers: { Origin: 'http://example.com' }
+		}), env, ctx);
+		await waitOnExecutionContext(ctx);
+		expect(response.status).toBe(502);
+		expect(response.headers.get('X-Cloud-Mail-Error')).toBe('business');
+		expect(response.headers.get('Access-Control-Expose-Headers')).toContain('X-Cloud-Mail-Error');
+	});
 	it('blocks cross-origin API requests by default', async () => {
 		const request = new Request('http://example.com/api/init', {
 			method: 'POST',
@@ -232,6 +245,7 @@ describe('security hardening', () => {
 		await waitOnExecutionContext(ctx);
 
 		expect(response.status).toBe(500);
+		expect(response.headers.has('X-Cloud-Mail-Error')).toBe(false);
 		expect(await response.json()).toEqual({
 			code: 500,
 			message: 'Internal Server Error'

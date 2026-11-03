@@ -506,6 +506,7 @@ const ja = {
     bindEmailMsg: 'メールアドレスを登録して連携してください',
     trustLevel: 'レベル',
     loginLoading: 'ログイン中...',
+    loginRetryMsg: 'ログイン認証は完了しましたが、アカウント情報を読み込めませんでした。パスワードを再入力せずに再試行できます。',
     oauthFlowInvalidMsg: 'LinuxDo のログイン検証が無効または期限切れです。もう一度お試しください。'
 }
 export default ja

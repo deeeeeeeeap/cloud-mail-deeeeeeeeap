@@ -68,6 +68,11 @@ http.interceptors.response.use(async res => {
     return Promise.reject(error)
   }
 
+  if (classification.kind === 'business') {
+    if (!noMsg) showApiMessage(classification.payload.message, 'error')
+    return Promise.reject(classification.payload)
+  }
+
   if (noMsg) {
     return Promise.reject(error)
   }

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 	verifyPassword: vi.fn(),
 	assertAllowed: vi.fn(),
 	recordFailure: vi.fn(),
+	releaseReservation: vi.fn(),
 	clearRateLimit: vi.fn(),
 	generateToken: vi.fn(),
 	uuid: vi.fn()
@@ -39,9 +40,11 @@ vi.mock('../src/utils/crypto-utils', () => ({
 }));
 
 vi.mock('../src/service/auth-rate-limit-service', () => ({
+	markAuthAbuse: error => Object.assign(error, { authAbuse: true }),
 	default: {
 		assertAllowed: mocks.assertAllowed,
 		recordFailure: mocks.recordFailure,
+		releaseReservation: mocks.releaseReservation,
 		clear: mocks.clearRateLimit
 	}
 }));
@@ -72,9 +75,35 @@ describe('login service logout', () => {
 		mocks.verifyPassword.mockResolvedValue(true);
 		mocks.assertAllowed.mockResolvedValue({ scope: 'login', identityHash: 'identity-hash' });
 		mocks.recordFailure.mockResolvedValue();
+		mocks.releaseReservation.mockResolvedValue();
 		mocks.clearRateLimit.mockResolvedValue();
 		mocks.generateToken.mockResolvedValue('jwt');
 		mocks.uuid.mockReturnValue('new-session');
+	});
+
+	it('releases a reservation after a database failure without recording a bad password', async () => {
+		const error = new Error('database unavailable');
+		mocks.selectUser.mockRejectedValueOnce(error);
+		await expect(loginService.login({ env: {} }, { email: 'user@example.com', password: 'password' })).rejects.toBe(error);
+		expect(mocks.releaseReservation).toHaveBeenCalledTimes(1);
+		expect(mocks.recordFailure).not.toHaveBeenCalled();
+	});
+
+	it('preserves the original error if reservation release also fails', async () => {
+		const error = new Error('password upgrade unavailable');
+		mocks.upgradePasswordHash.mockRejectedValueOnce(error);
+		mocks.releaseReservation.mockRejectedValueOnce(new Error('release unavailable'));
+		await expect(loginService.login({ env: {} }, { email: 'user@example.com', password: 'password' })).rejects.toBe(error);
+		expect(mocks.releaseReservation).toHaveBeenCalledTimes(1);
+		expect(mocks.recordFailure).not.toHaveBeenCalled();
+	});
+
+	it('does not release a second reservation when recording a wrong password raises 429', async () => {
+		mocks.verifyPassword.mockResolvedValueOnce(false);
+		mocks.recordFailure.mockRejectedValueOnce(Object.assign(new Error('locked'), { code: 429 }));
+		await expect(loginService.login({ env: {} }, { email: 'user@example.com', password: 'wrong' })).rejects.toMatchObject({ code: 429 });
+		expect(mocks.recordFailure).toHaveBeenCalledTimes(1);
+		expect(mocks.releaseReservation).not.toHaveBeenCalled();
 	});
 
 	it('keeps at most ten sessions when logging in', async () => {

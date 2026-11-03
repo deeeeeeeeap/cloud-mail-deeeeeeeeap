@@ -1,4 +1,4 @@
-export function resolveRouteNavigation({ token, toName, fromPath, setupRequired }) {
+export function resolveRouteNavigation({ token, sessionReady, toName, fromPath, setupRequired }) {
   if (setupRequired) {
     return toName === 'setup'
       ? { type: 'allow' }
@@ -8,15 +8,15 @@ export function resolveRouteNavigation({ token, toName, fromPath, setupRequired 
   if (toName === 'setup') {
     return {
       type: 'redirect',
-      to: token ? { name: 'layout' } : { name: 'login' }
+      to: token && sessionReady ? { name: 'layout' } : { name: 'login' }
     }
   }
 
-  if (!token && toName !== 'login') {
+  if ((!token || !sessionReady) && toName !== 'login') {
     return { type: 'redirect', to: { name: 'login' } }
   }
 
-  if (token && toName === 'login') {
+  if (token && sessionReady && toName === 'login') {
     return { type: 'redirect', to: fromPath }
   }
 

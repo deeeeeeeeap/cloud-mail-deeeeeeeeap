@@ -506,6 +506,7 @@ const en = {
     bindEmailMsg: 'Please register and bind an email address',
     trustLevel: 'Level',
     loginLoading: 'Logging in...',
+    loginRetryMsg: 'Sign-in verified, but account details could not load. Retry without entering your password again.',
     oauthFlowInvalidMsg: 'LinuxDo login verification is invalid or expired. Please try again.'
 }
 

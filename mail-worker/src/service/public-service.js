@@ -19,7 +19,7 @@ import { truncateByBytes, LIKE_PATTERN_MAX_BYTES } from '../utils/sql-utils';
 import accountService from './account-service';
 import emailService from './email-service';
 import { normalizeSendRequest } from '../utils/send-request-utils';
-import authRateLimitService from './auth-rate-limit-service';
+import authRateLimitService, { markAuthAbuse } from './auth-rate-limit-service';
 import { isConfiguredDomain } from '../utils/domain-utils';
 
 const PUBLIC_PREVIEW_TEXT_LENGTH = 240;
@@ -290,18 +290,21 @@ const publicService = {
 		let userRow;
 		try {
 			userRow = await this.verifyUser(c, params);
+			const currentUserRow = await userService.upgradePasswordHash(c, userRow, params.password);
+			if (!currentUserRow) throw markAuthAbuse(new BizError(t('loginFailed')));
+			await authRateLimitService.clear(c, rateIdentity);
 		} catch (e) {
-			await authRateLimitService.recordFailure(c, rateIdentity);
+			if (e?.authAbuse) {
+				await authRateLimitService.recordFailure(c, rateIdentity);
+			} else {
+				try {
+					await authRateLimitService.releaseReservation(c, rateIdentity);
+				} catch {
+					console.warn('public token rate-limit reservation release failed');
+				}
+			}
 			throw e;
 		}
-
-		const currentUserRow = await userService.upgradePasswordHash(c, userRow, params.password);
-		if (!currentUserRow) {
-			await authRateLimitService.recordFailure(c, rateIdentity);
-			throw new BizError(t('loginFailed'));
-		}
-		await authRateLimitService.clear(c, rateIdentity);
-		userRow = currentUserRow;
 
 		const uuid = uuidv4();
 
@@ -322,11 +325,11 @@ const publicService = {
 			|| !userRow
 			|| userRow.isDel === isDel.DELETE) {
 			await cryptoUtils.burnPasswordVerification(password);
-			throw new BizError(t('loginFailed'));
+			throw markAuthAbuse(new BizError(t('loginFailed')));
 		}
 
 		if (!await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password)) {
-			throw new BizError(t('loginFailed'));
+			throw markAuthAbuse(new BizError(t('loginFailed')));
 		}
 
 		return userRow;

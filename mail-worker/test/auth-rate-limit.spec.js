@@ -57,22 +57,23 @@ describe('authentication failure rate limits', () => {
 		await env.kv.delete(KvConst.PUBLIC_KEY);
 	});
 
-	it('atomically locks concurrent login failures after five attempts', async () => {
+	it('atomically locks concurrent login failures after fifteen attempts for one minute', async () => {
 		const ip = '203.0.113.10';
-		const bodies = await Promise.all(Array.from({ length: 12 }, () => (
+		const bodies = await Promise.all(Array.from({ length: 20 }, () => (
 			post('/login', 'wrong-password', ip, 'ADMIN@example.com')
 		)));
 
-		expect(bodies.filter(body => body.code === 429)).toHaveLength(8);
+		expect(bodies.filter(body => body.code === 429)).toHaveLength(6);
 		const row = await env.db.prepare(`
 			SELECT scope,
 			       identity_hash AS identityHash,
 			       fail_count AS failCount,
-			       lock_until AS lockUntil
+			       lock_until AS lockUntil, updated_at AS updatedAt
 			FROM auth_failure_limit
 			WHERE scope = 'login'
 		`).first();
-		expect(row.failCount).toBe(5);
+		expect(row.failCount).toBe(15);
+		expect(row.lockUntil - row.updatedAt).toBe(60);
 		expect(row.lockUntil).toBeGreaterThan(Math.floor(Date.now() / 1000));
 		expect(JSON.stringify(row)).not.toContain(ip);
 	});
@@ -250,6 +251,8 @@ describe('authentication failure rate limits', () => {
 		}
 
 		expect(body.code).toBe(429);
+		const publicLimit = await env.db.prepare("SELECT lock_until - updated_at AS duration FROM auth_failure_limit WHERE scope = 'public-gen-token'").first();
+		expect(publicLimit.duration).toBe(300);
 		expect((await post('/public/genToken', ADMIN_PASSWORD, ip)).code).toBe(429);
 		expect((await post('/login', ADMIN_PASSWORD, ip)).code).toBe(200);
 		expect(await env.kv.get(KvConst.PUBLIC_KEY)).toBeNull();
@@ -272,7 +275,7 @@ describe('authentication failure rate limits', () => {
 
 	it('allows authentication again after a temporary lock expires', async () => {
 		const ip = '203.0.113.13';
-		for (let index = 0; index < 5; index++) {
+		for (let index = 0; index < 15; index++) {
 			await post('/login', 'wrong-password', ip);
 		}
 		await env.db.prepare(`

@@ -63,6 +63,9 @@ function normalizeSettingRow(settingRow) {
 	if (!settingRow.resendTokens || typeof settingRow.resendTokens !== 'object' || Array.isArray(settingRow.resendTokens)) {
 		settingRow.resendTokens = {};
 	}
+	for (const [domain, token] of Object.entries(settingRow.resendTokens)) {
+		if (typeof token !== 'string' || !token) delete settingRow.resendTokens[domain];
+	}
 
 	return settingRow;
 }
@@ -236,6 +239,12 @@ const settingService = {
 			}
 		}
 
+		if (params.resendTokens !== undefined && (
+			!params.resendTokens || typeof params.resendTokens !== 'object' || Array.isArray(params.resendTokens)
+			|| Object.values(params.resendTokens).some(token => token !== null && typeof token !== 'string')
+		)) {
+			throw new BizError('Resend tokens must be strings or null', 400);
+		}
 		let resendTokens = { ...settingData.resendTokens, ...params.resendTokens };
 		Object.keys(resendTokens).forEach(domain => {
 			if (!resendTokens[domain]) delete resendTokens[domain];
@@ -273,14 +282,18 @@ const settingService = {
 	},
 
 	async setBackground(c, params) {
-
-		let { background } = params
-
-		await this.deleteBackground(c);
+		let background = params?.background;
+		if (typeof background !== 'string') throw new BizError('Invalid background image', 400);
+		const { background: previousBackground } = await this.query(c);
 
 		if (background && !background.startsWith('http')) {
 
-			const file = fileUtils.base64ToFile(background)
+			let file;
+			try {
+				file = fileUtils.base64ToFile(background);
+			} catch {
+				throw new BizError('Invalid background image', 400);
+			}
 
 			const arrayBuffer = await file.arrayBuffer();
 			background = constant.BACKGROUND_PREFIX + await fileUtils.getBuffHash(arrayBuffer) + fileUtils.getExtFileName(file.name);
@@ -296,6 +309,14 @@ const settingService = {
 
 		await orm(c).update(setting).set({ background }).run();
 		await this.refresh(c);
+		// 新引用持久化后才清理旧图；清理失败不能把已成功的设置修改变成失败。
+		if (previousBackground && previousBackground !== background && !previousBackground.startsWith('http')) {
+			try {
+				await r2Service.delete(c, previousBackground);
+			} catch {
+				console.warn('Previous background cleanup failed');
+			}
+		}
 		return background;
 	},
 
