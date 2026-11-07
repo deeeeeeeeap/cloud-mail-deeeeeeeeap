@@ -168,7 +168,7 @@ export async function email(message, env, ctx) {
 
 		if (shouldExtractCode && !patternCode) {
 			const codeTask = (async () => {
-				const code = await aiService.extractCode({ env }, email, { aiCode, aiCodeFilter });
+				const code = await aiService.extractCode({ env }, email, { aiCode, aiCodeFilter, patternChecked: true });
 				if (code) {
 					await emailService.updateCode({ env }, emailRow.emailId, code);
 				}

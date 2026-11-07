@@ -1,7 +1,7 @@
 import BizError from '../error/biz-error';
 import orm from '../entity/orm';
 import { v4 as uuidv4 } from 'uuid';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
 import saltHashUtils from '../utils/crypto-utils';
 import cryptoUtils from '../utils/crypto-utils';
 import emailUtils from '../utils/email-utils';
@@ -10,7 +10,7 @@ import verifyUtils from '../utils/verify-utils';
 import { t } from '../i18n/i18n';
 import reqUtils from '../utils/req-utils';
 import dayjs from 'dayjs';
-import { isDel, roleConst } from '../const/entity-const';
+import { emailConst, isDel, roleConst } from '../const/entity-const';
 import email from '../entity/email';
 import userService from './user-service';
 import KvConst from '../const/kv-const';
@@ -21,12 +21,130 @@ import emailService from './email-service';
 import { normalizeSendRequest } from '../utils/send-request-utils';
 import authRateLimitService, { markAuthAbuse } from './auth-rate-limit-service';
 import { isConfiguredDomain } from '../utils/domain-utils';
+import { escapeHtml } from '../utils/html-sanitize';
+import result from '../model/result';
+import apiKeyService, { LEGACY_PRINCIPAL, hashSecret, isSenderAllowed, resolvePublicHourlyLimit } from './api-key-service';
+import apiIdempotencyService, { readIdempotencyKey } from './api-idempotency-service';
 
 const PUBLIC_PREVIEW_TEXT_LENGTH = 240;
-const PUBLIC_SEND_HOURLY_LIMIT = 100;
+const PUBLIC_STATUS_MAX_IDS = 50;
+
+const EMAIL_STATUS_NAMES = Object.freeze({
+	[emailConst.status.RECEIVE]: 'received',
+	[emailConst.status.SENT]: 'sent',
+	[emailConst.status.DELIVERED]: 'delivered',
+	[emailConst.status.BOUNCED]: 'bounced',
+	[emailConst.status.COMPLAINED]: 'complained',
+	[emailConst.status.DELAYED]: 'delayed',
+	[emailConst.status.SAVING]: 'pending',
+	[emailConst.status.NOONE]: 'noone',
+	[emailConst.status.FAILED]: 'failed'
+});
 
 function toBoolFlag(value) {
 	return value === true || value === 1 || value === '1' || String(value || '').toLowerCase() === 'true';
+}
+
+function principalOf(c) {
+	return c.get?.('apiPrincipal') || LEGACY_PRINCIPAL;
+}
+
+function toHttpStatus(code) {
+	return Number.isInteger(code) && code >= 400 && code <= 599 ? code : 500;
+}
+
+async function storedEmailStatus(c, emailId) {
+	try {
+		const row = await c.env.db.prepare('SELECT status FROM email WHERE email_id = ?').bind(emailId).first();
+		return row ? Number(row.status) : null;
+	} catch {
+		return null;
+	}
+}
+
+export function emailStatusName(row) {
+	const status = Number(row?.status);
+	if (status === emailConst.status.SAVING && row?.message === 'DELIVERY_OUTCOME_UNKNOWN') {
+		return 'unknown';
+	}
+	return EMAIL_STATUS_NAMES[status] || 'unknown';
+}
+
+export function textToHtml(text) {
+	return escapeHtml(text).replace(/\r\n|\r|\n/g, '<br>');
+}
+
+function parseStoredMessage(value) {
+	if (!value) {
+		return '';
+	}
+	try {
+		const parsed = JSON.parse(value);
+		return typeof parsed?.message === 'string' ? parsed.message : String(value);
+	} catch {
+		return String(value);
+	}
+}
+
+function toPublicSendResult(row) {
+	return {
+		emailId: row.emailId,
+		status: row.status,
+		statusName: emailStatusName(row),
+		type: row.type,
+		accountId: row.accountId,
+		userId: row.userId,
+		sendEmail: row.sendEmail,
+		name: row.name,
+		subject: row.subject,
+		recipient: row.recipient,
+		cc: row.cc,
+		bcc: row.bcc,
+		createTime: row.createTime,
+		resendEmailId: row.resendEmailId || null,
+		message: row.message || ''
+	};
+}
+
+async function sendRequestFingerprint(params) {
+	return await hashSecret(JSON.stringify({
+		sendEmail: String(params.sendEmail || '').trim().toLowerCase(),
+		receiveEmail: params.receiveEmail,
+		cc: params.cc,
+		bcc: params.bcc,
+		replyTo: params.replyTo,
+		name: params.name || '',
+		subject: params.subject,
+		content: params.content,
+		text: params.text,
+		attachments: (params.attachments || []).map(item => [
+			item.filename,
+			item.contentType,
+			item.size,
+			String(item.content || '').slice(0, 128)
+		])
+	}));
+}
+
+function addressScopeCondition(principal) {
+	const patterns = principal?.allowedSenders || [];
+	if (patterns.length === 0) {
+		return null;
+	}
+	const exact = patterns.filter(item => !item.startsWith('*@'));
+	const domains = patterns.filter(item => item.startsWith('*@')).map(item => item.slice(2));
+	const parts = [];
+	for (const column of [email.sendEmail, email.toEmail]) {
+		if (exact.length > 0) {
+			parts.push(sql`LOWER(${column}) IN (${sql.join(exact.map(item => sql`${item}`), sql`, `)})`);
+		}
+		// D1 拒绝超过 50 字节的 LIKE 模式，长域名无法安全地写成 LIKE，所以按后缀精确比较
+		for (const domain of domains) {
+			const suffix = `@${domain}`;
+			parts.push(sql`LOWER(SUBSTR(${column}, ${-suffix.length})) = ${suffix}`);
+		}
+	}
+	return sql`(${sql.join(parts, sql` OR `)})`;
 }
 
 function previewText(row) {
@@ -64,52 +182,202 @@ const publicService = {
 	async sendEmail(c, params) {
 		params = params || {};
 		const { sendEmail } = params;
+		const principal = principalOf(c);
 
 		if (typeof sendEmail !== 'string' || !sendEmail.trim()) {
 			throw new BizError('sendEmail is required', 400);
 		}
 
 		params = normalizeSendRequest(params, { dedupeRecipients: true });
-		const { receiveEmail, subject, content, text, attachments } = params;
-
-		const accountRow = await accountService.selectByEmailIncludeDel(c, sendEmail);
-		if (!accountRow || accountRow.isDel !== isDel.NORMAL) {
-			throw new BizError('sender account not found', 404);
+		const { receiveEmail, cc, bcc, replyTo, subject, attachments } = params;
+		let { content, text } = params;
+		if (!content.trim()) {
+			content = textToHtml(text);
+		} else if (!text.trim()) {
+			text = emailUtils.htmlToText(content);
 		}
 
-		return emailService.send(c, {
-			accountId: accountRow.accountId,
-			name: params.name,
-			receiveEmail,
-			text,
-			content: content || text,
-			subject,
-			attachments
-		}, accountRow.userId, {
-			beforePersist: () => this.reserveHourlySend(c)
-		});
+		apiKeyService.assertSenderAllowed(principal, sendEmail);
+
+		const idempotencyKey = readIdempotencyKey(c, params);
+		const idempotency = idempotencyKey
+			? await apiIdempotencyService.begin(c, {
+				principal,
+				key: idempotencyKey,
+				requestHash: await sendRequestFingerprint(params)
+			})
+			: null;
+
+		let persistedEmailId = null;
+		try {
+			const accountRow = await accountService.selectByEmailIncludeDel(c, sendEmail);
+			if (!accountRow || accountRow.isDel !== isDel.NORMAL) {
+				throw new BizError('sender account not found', 404);
+			}
+
+			const results = await emailService.send(c, {
+				accountId: accountRow.accountId,
+				name: params.name,
+				receiveEmail,
+				cc,
+				bcc,
+				replyTo,
+				text,
+				content,
+				subject,
+				attachments
+			}, accountRow.userId, {
+				accountRow,
+				requireActiveOwner: true,
+				beforePersist: () => this.reservePublicSend(c, principal),
+				onPersisted: emailId => {
+					persistedEmailId = emailId;
+				}
+			});
+
+			const data = results.map(toPublicSendResult);
+			await apiIdempotencyService.complete(c, idempotency, 200, result.ok(data));
+			return data;
+		} catch (e) {
+			if (idempotency) {
+				// 只有邮件已明确标记为 FAILED 时才能确认没有外发；其余落库后的失败一律缓存，保证同一个键最多发送一次
+				const definitelyNotSent = !persistedEmailId
+					|| await storedEmailStatus(c, persistedEmailId) === emailConst.status.FAILED;
+				if (definitelyNotSent) {
+					await apiIdempotencyService.release(c, idempotency);
+				} else {
+					const isBizError = e?.name === 'BizError';
+					await apiIdempotencyService.complete(
+						c,
+						idempotency,
+						isBizError ? toHttpStatus(e.code) : 500,
+						isBizError ? result.fail(e.message, e.code) : result.fail('Internal Server Error', 500)
+					);
+				}
+			}
+			throw e;
+		}
+	},
+
+	async reservePublicSend(c, principal) {
+		await this.reserveHourlySend(c);
+		try {
+			const usage = await apiKeyService.reserveSend(c, principal);
+			if (usage?.hourLimit) {
+				c.set?.('apiRateLimit', {
+					limit: usage.hourLimit,
+					remaining: Math.max(0, usage.hourLimit - usage.hourCount)
+				});
+			}
+		} catch (e) {
+			await this.releaseHourlySend(c);
+			throw e;
+		}
 	},
 
 	async reserveHourlySend(c) {
+		const limit = resolvePublicHourlyLimit(c);
+		if (limit === 0) {
+			return;
+		}
 		const windowHour = Math.floor(Date.now() / 3600000);
-		const result = await c.env.db.prepare(`
+		const reservation = await c.env.db.prepare(`
 			INSERT INTO public_send_rate_limit (window_hour, count)
 			VALUES (?, 1)
 			ON CONFLICT(window_hour) DO UPDATE
 			SET count = public_send_rate_limit.count + 1
 			WHERE public_send_rate_limit.count < ?
-		`).bind(windowHour, PUBLIC_SEND_HOURLY_LIMIT).run();
+		`).bind(windowHour, limit).run();
 
-		if (Number(result?.meta?.changes || 0) !== 1) {
+		if (Number(reservation?.meta?.changes || 0) !== 1) {
 			throw new BizError('send rate limit exceeded', 429);
 		}
+	},
+
+	async releaseHourlySend(c) {
+		if (resolvePublicHourlyLimit(c) === 0) {
+			return;
+		}
+		try {
+			await c.env.db.prepare(`
+				UPDATE public_send_rate_limit
+				SET count = count - 1
+				WHERE window_hour = ? AND count > 0
+			`).bind(Math.floor(Date.now() / 3600000)).run();
+		} catch (e) {
+			console.warn('Public send reservation release failed:', e?.message || e);
+		}
+	},
+
+	async emailStatus(c, params) {
+		params = params || {};
+		const principal = principalOf(c);
+		const rawIds = Array.isArray(params.emailIds)
+			? params.emailIds
+			: String(params.emailIds ?? params.emailId ?? '').split(',');
+		const emailIds = [...new Set(rawIds
+			.map(value => Number(String(value).trim()))
+			.filter(value => Number.isInteger(value) && value > 0))];
+
+		if (emailIds.length === 0) {
+			throw new BizError('emailIds is required', 400);
+		}
+		if (emailIds.length > PUBLIC_STATUS_MAX_IDS) {
+			throw new BizError(`emailIds must contain no more than ${PUBLIC_STATUS_MAX_IDS} items`, 400);
+		}
+
+		const placeholders = emailIds.map(() => '?').join(',');
+		const { results = [] } = await c.env.db.prepare(`
+			SELECT e.email_id AS emailId,
+				e.send_email AS sendEmail,
+				e.subject,
+				e.recipient,
+				e.status,
+				e.message,
+				e.resend_email_id AS resendEmailId,
+				e.create_time AS createTime,
+				da.provider AS deliveryProvider,
+				da.status AS deliveryStatus,
+				da.error_summary AS deliveryError,
+				da.update_time AS deliveryUpdateTime
+			FROM email e
+			LEFT JOIN delivery_attempt da ON da.email_id = e.email_id
+			WHERE e.email_id IN (${placeholders})
+			  AND e.type = ?
+		`).bind(...emailIds, emailConst.type.SEND).all();
+
+		const list = results
+			.filter(row => isSenderAllowed(principal, row.sendEmail))
+			.map(row => ({
+				emailId: row.emailId,
+				status: row.status,
+				statusName: emailStatusName(row),
+				sendEmail: row.sendEmail,
+				subject: row.subject,
+				recipient: row.recipient,
+				createTime: row.createTime,
+				resendEmailId: row.resendEmailId || null,
+				message: row.message === 'DELIVERY_OUTCOME_UNKNOWN' ? row.message : parseStoredMessage(row.message),
+				delivery: row.deliveryStatus ? {
+					provider: row.deliveryProvider,
+					status: row.deliveryStatus,
+					error: row.deliveryError || null,
+					updateTime: row.deliveryUpdateTime
+				} : null
+			}));
+		const found = new Set(list.map(item => item.emailId));
+		return {
+			list,
+			notFound: emailIds.filter(id => !found.has(id))
+		};
 	},
 
 	async emailList(c, params) {
 
 		params = params || {};
-		let { toEmail, content, subject, sendName, sendEmail, timeSort, num, size, type , isDel, includeContent } = params
+		let { toEmail, content, subject, sendName, sendEmail, timeSort, num, size, type , isDel, includeContent, afterId } = params
 		const withContent = toBoolFlag(includeContent);
+		const principal = principalOf(c);
 
 		const query = orm(c).select(publicEmailSelect(withContent)).from(email)
 		if (isDel === undefined || isDel === null || isDel === '') {
@@ -169,19 +437,31 @@ const publicService = {
 			conditions.push(eq(email.isDel, Number(isDel)))
 		}
 
+		const scopeCondition = addressScopeCondition(principal);
+		if (scopeCondition) {
+			conditions.push(scopeCondition);
+		}
+
+		const cursorId = Number(afterId);
+		const useCursor = afterId !== undefined && afterId !== null && afterId !== ''
+			&& Number.isInteger(cursorId) && cursorId >= 0;
+		if (useCursor) {
+			conditions.push(gt(email.emailId, cursorId));
+		}
+
 		if (conditions.length === 1) {
 			query.where(...conditions)
 		} else if (conditions.length > 1) {
 			query.where(and(...conditions))
 		}
 
-		if (timeSort === 'asc') {
+		if (useCursor || timeSort === 'asc') {
 			query.orderBy(asc(email.emailId));
 		} else {
 			query.orderBy(desc(email.emailId));
 		}
 
-		const list = await query.limit(size).offset(num);
+		const list = await (useCursor ? query.limit(size) : query.limit(size).offset(num));
 		return list.map(item => ({
 			...item,
 			previewText: previewText(item)

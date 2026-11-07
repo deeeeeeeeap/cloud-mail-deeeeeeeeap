@@ -9,7 +9,12 @@ const mocks = vi.hoisted(() => ({
 	clearExpiredAuthFailures: vi.fn(),
 	refreshEchartsCache: vi.fn(),
 	clearStaleCodes: vi.fn(),
-	reconcileDeliveryAttempts: vi.fn()
+	reconcileDeliveryAttempts: vi.fn(),
+	clearExpiredApiUsage: vi.fn()
+}));
+
+vi.mock('../src/service/api-key-service', () => ({
+	default: { clearExpired: mocks.clearExpiredApiUsage }
 }));
 
 vi.mock('../src/service/verify-record-service', () => ({
@@ -66,6 +71,7 @@ describe('scheduled handler', () => {
 		expect(mocks.resetDaySendCount).not.toHaveBeenCalled();
 		expect(mocks.clearNoBindOathUser).not.toHaveBeenCalled();
 		expect(mocks.clearStaleCodes).not.toHaveBeenCalled();
+		expect(mocks.clearExpiredApiUsage).not.toHaveBeenCalled();
 	});
 
 	it('continues daily maintenance tasks after one task fails', async () => {
@@ -79,6 +85,7 @@ describe('scheduled handler', () => {
 		expect(mocks.reconcileDeliveryAttempts).toHaveBeenCalledWith({ env: {} }, { limit: 2 });
 		expect(mocks.clearNoBindOathUser).toHaveBeenCalledTimes(1);
 		expect(mocks.clearExpiredAuthFailures).toHaveBeenCalledTimes(1);
+		expect(mocks.clearExpiredApiUsage).toHaveBeenCalledTimes(1);
 		expect(mocks.refreshEchartsCache).not.toHaveBeenCalled();
 		expect(mocks.clearStaleCodes).not.toHaveBeenCalled();
 	});

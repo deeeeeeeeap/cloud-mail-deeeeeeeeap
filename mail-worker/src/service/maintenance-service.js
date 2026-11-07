@@ -412,7 +412,8 @@ const maintenanceService = {
 				['maintenance-v3.5', () => dbInit.v3_5DB(c)],
 				['maintenance-v3.6', () => dbInit.v3_6DB(c)],
 				['maintenance-v3.7', () => dbInit.v3_7DB(c)],
-				['maintenance-v3.8', () => dbInit.v3_8DB(c)]
+				['maintenance-v3.8', () => dbInit.v3_8DB(c)],
+				['maintenance-v3.9', () => dbInit.v3_9DB(c)]
 			]);
 			dbInit.invalidateBootstrapStatus(c);
 			await dbInit.assertBootstrapReady(c);

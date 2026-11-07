@@ -76,8 +76,8 @@ function parseCorsOrigins(value) {
 function setCorsHeaders(c, origin) {
 	c.header('Access-Control-Allow-Origin', origin);
 	c.header('Access-Control-Allow-Credentials', 'true');
-	c.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept-Language');
-	c.header('Access-Control-Expose-Headers', 'X-Cloud-Mail-Error');
+	c.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept-Language, X-API-Key, Idempotency-Key');
+	c.header('Access-Control-Expose-Headers', 'X-Cloud-Mail-Error, Idempotent-Replayed, X-RateLimit-Limit, X-RateLimit-Remaining');
 	c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
 	c.header('Access-Control-Max-Age', '86400');
 	c.header('Vary', 'Origin');

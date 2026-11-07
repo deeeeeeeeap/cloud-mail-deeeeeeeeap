@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import analysisService from '../src/service/analysis-service';
 import analysisDao from '../src/dao/analysis-dao';
-import kvConst from '../src/const/kv-const';
 
 function createCacheContext(enabled = true) {
 	let now = 0;
@@ -29,7 +28,8 @@ function stubAggregates() {
 	vi.spyOn(analysisDao, 'userDayCount').mockResolvedValue([]);
 	vi.spyOn(analysisDao, 'receiveDayCount').mockResolvedValue([]);
 	vi.spyOn(analysisDao, 'sendDayCount').mockResolvedValue([]);
-	return { numberCount, nameRatio };
+	const daySendTotal = vi.spyOn(analysisDao, 'daySendTotal').mockResolvedValue(0);
+	return { numberCount, nameRatio, daySendTotal };
 }
 
 describe('on-demand analysis snapshots', () => {
@@ -75,14 +75,17 @@ describe('on-demand analysis snapshots', () => {
 
 	it('returns live aggregates when caching is disabled', async () => {
 		const { c } = createCacheContext(false);
-		const { numberCount } = stubAggregates();
+		const { numberCount, daySendTotal } = stubAggregates();
 		await analysisService.echarts(c, { timeZone: 'UTC' });
 		numberCount.mockResolvedValue({ users: 2 });
+		daySendTotal.mockResolvedValue(3);
 
-		expect((await analysisService.echarts(c, { timeZone: 'UTC' })).numberCount).toEqual({ users: 2 });
+		const result = await analysisService.echarts(c, { timeZone: 'UTC' });
+		expect(result.numberCount).toEqual({ users: 2 });
+		expect(result.daySendTotal).toBe(3);
 		expect(numberCount).toHaveBeenCalledTimes(2);
 		expect(c.env.kv.put).not.toHaveBeenCalled();
-		expect(c.env.kv.get.mock.calls.every(([key]) => key.startsWith(kvConst.SEND_DAY_COUNT))).toBe(true);
+		expect(c.env.kv.get).not.toHaveBeenCalled();
 	});
 
 	it.each([true, false])('falls back to UTC for invalid timezones with caching=%s', async enabled => {

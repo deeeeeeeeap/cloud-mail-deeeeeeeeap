@@ -677,21 +677,28 @@ describe('attachment access control', () => {
 		expect(recorder.operationLog[2].bindings).toContain('BATCH_ABORTED');
 	});
 
-	it('marks unattempted sent attachments failed when an upload batch aborts', async () => {
+	it('uploads sent attachments in parallel and fails the whole batch when any upload fails', async () => {
 		const recorder = createInsertDbStub();
 		r2Service.putObj
 			.mockImplementationOnce(async (...args) => {
 				recorder.operationLog.push({ type: 'put', args });
 			})
-			.mockRejectedValueOnce(new Error('second object upload failed'));
+			.mockRejectedValueOnce(new Error('second object upload failed'))
+			.mockImplementationOnce(async (...args) => {
+				recorder.operationLog.push({ type: 'put', args });
+			});
 
 		await expect(attService.saveSendAtt({ env: { db: recorder.db } }, [
 			{ content: 'YQ==', filename: 'first.txt', contentType: 'text/plain' },
 			{ content: 'Yg==', filename: 'second.txt', contentType: 'text/plain' },
-			{ content: 'Yw==', filename: 'unattempted.txt', contentType: 'text/plain' }
+			{ content: 'Yw==', filename: 'third.txt', contentType: 'text/plain' }
 		], 7, 30, 20)).rejects.toThrow('second object upload failed');
 
-		expect(r2Service.putObj).toHaveBeenCalledTimes(2);
+		expect(r2Service.putObj).toHaveBeenCalledTimes(3);
+		expect(recorder.operationLog.some(operation => (
+			operation.type === 'update'
+			&& operation.bindings.includes(attConst.status.READY)
+		))).toBe(false);
 		expect(recorder.operationLog.some(operation => (
 			operation.type === 'update'
 			&& operation.bindings.includes(attConst.status.FAILED)
@@ -919,13 +926,16 @@ describe('attachment access control', () => {
 		expect(recorder.operationLog[2].bindings).toContain(attConst.status.READY);
 	});
 
-	it('marks unattempted inline attachments failed when an upload batch aborts', async () => {
+	it('uploads inline attachments in parallel and fails the whole batch when any upload fails', async () => {
 		const recorder = createInsertDbStub();
 		r2Service.putObj
 			.mockImplementationOnce(async (...args) => {
 				recorder.operationLog.push({ type: 'put', args });
 			})
-			.mockRejectedValueOnce(new Error('second inline upload failed'));
+			.mockRejectedValueOnce(new Error('second inline upload failed'))
+			.mockImplementationOnce(async (...args) => {
+				recorder.operationLog.push({ type: 'put', args });
+			});
 
 		await expect(attService.saveArticleAtt({ env: { db: recorder.db } }, [
 			{
@@ -943,15 +953,19 @@ describe('attachment access control', () => {
 				contentId: 'cid-second'
 			},
 			{
-				key: 'attachments/unattempted.png',
+				key: 'attachments/third.png',
 				buff: new Uint8Array([3]),
-				filename: 'unattempted.png',
+				filename: 'third.png',
 				mimeType: 'image/png',
-				contentId: 'cid-unattempted'
+				contentId: 'cid-third'
 			}
 		], 7, 30, 20)).rejects.toThrow('second inline upload failed');
 
-		expect(r2Service.putObj).toHaveBeenCalledTimes(2);
+		expect(r2Service.putObj).toHaveBeenCalledTimes(3);
+		expect(recorder.operationLog.some(operation => (
+			operation.type === 'update'
+			&& operation.bindings.includes(attConst.status.READY)
+		))).toBe(false);
 		expect(recorder.operationLog.some(operation => (
 			operation.type === 'update'
 			&& operation.bindings.includes(attConst.status.FAILED)

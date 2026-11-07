@@ -418,7 +418,7 @@ describe('email service status synchronization', () => {
 		expect(sendMock.mock.calls[0][0].attachments[0].content.byteLength).toBe(3 * 1024 * 1024);
 	});
 
-	it('rejects Cloudflare Email messages over 5 MiB before persistence', async () => {
+	it('rejects Cloudflare Email messages over 25 MiB before persistence', async () => {
 		const sendMock = vi.fn();
 		const c = {
 			env: {
@@ -441,11 +441,11 @@ describe('email service status synchronization', () => {
 			attachments: [{
 				filename: 'large.bin',
 				contentType: 'application/octet-stream',
-				content: base64ForDecodedSize(4 * 1024 * 1024)
+				content: base64ForDecodedSize(19 * 1024 * 1024)
 			}]
 		}, 1)).rejects.toMatchObject({
 			code: 413,
-			message: 'Cloudflare Email message exceeds 5 MiB limit'
+			message: 'Cloudflare Email message exceeds 25 MiB limit'
 		});
 
 		expect(mockState.insertValues).toHaveLength(0);

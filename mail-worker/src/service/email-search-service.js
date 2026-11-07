@@ -137,7 +137,7 @@ const emailSearchService = {
 			const latestPromise = withLatest ? c.env.db.prepare(`
 				SELECT email_id AS emailId, account_id AS accountId, user_id AS userId
 				FROM email
-				WHERE type = ? AND status != ?
+				WHERE +type = ? AND status != ?
 				ORDER BY email_id DESC
 				LIMIT 1
 			`).bind(emailConst.type.RECEIVE, emailConst.status.SAVING).first() : Promise.resolve(null);

@@ -98,6 +98,14 @@ function buildConditions(params, options = {}) {
 
 	if (stale === 'fresh') {
 		conditions.push(`datetime(e.create_time) > datetime('now', '-${CODE_STALE_MINUTES} minutes')`);
+		// datetime() 包裹后无法约束索引范围；用时间窗内第一封收件的 email_id 作下界（走 idx_email_type_create_time），
+		// 否则新鲜验证码不足一页时会把该用户的全部收件扫完
+		conditions.push(`e.email_id >= (
+			SELECT COALESCE(MIN(w.email_id), 9223372036854775807)
+			FROM email w
+			WHERE w.type = ? AND w.create_time > datetime('now', '-${CODE_STALE_MINUTES} minutes')
+		)`);
+		binds.push(emailConst.type.RECEIVE);
 	}
 
 	if (stale === 'stale') {
@@ -155,7 +163,7 @@ const codeService = {
 				e.to_email AS toEmail,
 				e.create_time AS createTime,
 				u.email AS userEmail
-			FROM email e
+			FROM email e NOT INDEXED
 			LEFT JOIN user u ON u.user_id = e.user_id
 			WHERE ${conditions.sql}
 			ORDER BY e.email_id ${conditions.order}

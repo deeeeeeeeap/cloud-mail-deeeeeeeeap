@@ -38,4 +38,13 @@ describe('daily send count reset query budget', () => {
 		expect(normalizedSql).toMatch(/where .*type.* in \([^)]*\).* and .*send_count.*(?:<>|!=)/);
 		expect(statements[0].bindings).toEqual([0, 2, 5, 0]);
 	});
+
+	it('skips the update when no role has a daily send quota', async () => {
+		const prepare = vi.fn();
+		vi.spyOn(roleService, 'selectByIdsAndSendType').mockResolvedValue([]);
+
+		await userService.resetDaySendCount({ env: { db: { prepare } } });
+
+		expect(prepare).not.toHaveBeenCalled();
+	});
 });

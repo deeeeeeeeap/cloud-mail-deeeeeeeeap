@@ -478,6 +478,7 @@ const userService = {
 	async resetDaySendCount(c) {
 		const roleList = await roleService.selectByIdsAndSendType(c, 'email:send', roleConst.sendType.DAY);
 		const roleIds = roleList.map(action => action.roleId);
+		if (roleIds.length === 0) return;
 		await orm(c).update(user).set({ sendCount: 0 }).where(and(
 			inArray(user.type, roleIds),
 			ne(user.sendCount, 0)

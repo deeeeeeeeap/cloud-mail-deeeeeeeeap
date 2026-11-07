@@ -7,6 +7,7 @@ import BizError from '../error/biz-error';
 import cryptoUtils from '../utils/crypto-utils';
 import { readBoundedJson } from '../utils/request-body-utils';
 import { getBootstrapStatus, invalidateBootstrapStatusCache } from './status';
+import { API_SCHEMA_SQL } from '../service/api-key-service';
 
 export const INIT_SECRET_HEADER = 'X-Cloud-Mail-Init-Secret';
 const ADMIN_BOOTSTRAP_JSON_MAX_BYTES = 32 * 1024;
@@ -52,6 +53,7 @@ const dbInit = {
 			['v3.6', () => this.v3_6DB(c)],
 			['v3.7', () => this.v3_7DB(c)],
 			['v3.8', () => this.v3_8DB(c)],
+			['v3.9', () => this.v3_9DB(c)],
 			['settings-cache', () => settingService.refresh(c)]
 		]);
 		this.invalidateBootstrapStatus(c);
@@ -521,6 +523,11 @@ const dbInit = {
 			CREATE INDEX IF NOT EXISTS idx_verify_record_ip_type
 			ON verify_record(ip, type)
 		`).run();
+	},
+
+	// API 密钥相关表只服务可选的自动化接口，不进入启动就绪检查；服务首次使用时也会幂等补建
+	async v3_9DB(c) {
+		await c.env.db.batch(API_SCHEMA_SQL.map(sql => c.env.db.prepare(sql)));
 	},
 
 	async v3_0DB(c) {

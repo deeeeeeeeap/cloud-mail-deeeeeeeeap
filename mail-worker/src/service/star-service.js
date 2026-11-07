@@ -50,11 +50,13 @@ const starService = {
 
 	async add(c, params, userId) {
 		const { emailId } = params;
-		const email = await emailService.selectById(c, emailId);
-		if (!email) {
+		const emailRow = await orm(c).select({ userId: email.userId }).from(email).where(
+			and(eq(email.emailId, emailId), eq(email.isDel, isDel.NORMAL))
+		).get();
+		if (!emailRow) {
 			throw new BizError(t('starNotExistEmail'));
 		}
-		if (email.userId !== userId) {
+		if (emailRow.userId !== userId) {
 			throw new BizError(t('starNotExistEmail'));
 		}
 		const exist = await orm(c).select().from(star).where(

@@ -82,30 +82,6 @@ async function updateRecoveryStatus(c, params) {
 	await prepareRecoveryStatusUpdate(c, params).run();
 }
 
-async function updateAttachmentKeyStatus(c, attachments, key, status, message = null) {
-	const emailIds = [...new Set(attachments
-		.filter(item => item.key === key)
-		.map(item => item.emailId))];
-
-	for (const emailId of emailIds) {
-		const result = await c.env.db.prepare(`
-			UPDATE attachments
-			SET status = ?, message = ?
-			WHERE email_id = ? AND key = ? AND status = ?
-		`).bind(
-			status,
-			message,
-			emailId,
-			key,
-			attConst.status.PENDING
-		).run();
-		const changes = Number(result?.meta?.changes);
-		if (Number.isFinite(changes) && changes === 0) {
-			throw new Error('Attachment status transition did not update any rows');
-		}
-	}
-}
-
 async function failPendingAttachmentRows(c, attachments, message = 'BATCH_ABORTED') {
 	const emailIds = [...new Set(attachments
 		.map(item => item.emailId)
@@ -171,6 +147,24 @@ async function markAttachmentKeysReady(c, attachments, keys) {
 		}
 	}
 }
+// 发信附件：并行写对象后一次批量置 READY；任一失败则整批置 FAILED 并抛出首个错误（父邮件随之失败、不可见）
+async function storeSendObjects(c, rows, objects, write) {
+	const results = await Promise.allSettled(objects.map(write));
+	const failedIndex = results.findIndex(result => result.status === 'rejected');
+	if (failedIndex > -1) {
+		const failedKeys = objects
+			.filter((_, index) => results[index].status === 'rejected')
+			.map(item => item.key);
+		try {
+			await failAttachmentKeys(c, rows, failedKeys);
+		} catch {
+			// The parent email remains hidden/failed; maintenance can inspect PENDING rows.
+		}
+		throw results[failedIndex].reason;
+	}
+	await markAttachmentKeysReady(c, rows, objects.map(item => item.key));
+}
+
 const attService = {
 
 	async addAtt(c, attachments) {
@@ -452,6 +446,10 @@ const attService = {
 
 	async toImageUrlHtml(c, content, userId) {
 
+		if (!content || !/<img[\s/>]/i.test(content)) {
+			return { imageDataList: [], html: content || '' };
+		}
+
 		const { r2Domain } = await settingService.query(c);
 
 		const { document } = parseHTML(content);
@@ -576,38 +574,9 @@ const attService = {
 		}
 
 		try {
-			for (const att of objectByKey.values()) {
-				try {
-					await r2Service.putObj(c, att.key, att.buff, {
-						contentType: att.mimeType
-					});
-				} catch (error) {
-					try {
-						await updateAttachmentKeyStatus(
-							c,
-							attDataList,
-							att.key,
-							attConst.status.FAILED,
-							'OBJECT_WRITE_FAILED'
-						);
-					} catch {
-						// The parent email remains hidden/failed; maintenance can inspect PENDING rows.
-					}
-					try {
-						await failPendingAttachmentRows(c, attDataList);
-					} catch {
-						// D1 is unavailable; the parent send path will remain failed and inaccessible.
-					}
-					throw error;
-				}
-
-				await updateAttachmentKeyStatus(
-					c,
-					attDataList,
-					att.key,
-					attConst.status.READY
-				);
-			}
+			await storeSendObjects(c, attDataList, [...objectByKey.values()], att => r2Service.putObj(c, att.key, att.buff, {
+				contentType: att.mimeType
+			}));
 		} finally {
 			for (const att of attList) {
 				delete att.buff;
@@ -636,44 +605,17 @@ const attService = {
 		}
 
 		try {
-			for (const attData of objectByKey.values()) {
-				try {
-					if (attData.buff) {
-						await r2Service.putObj(c, attData.key, attData.buff, {
-							contentType: attachmentMimeType(attData),
-							cacheControl: `max-age=259200`,
-							contentDisposition: 'inline'
-						});
-					} else if (!await r2Service.exists(c, attData.key)) {
-						throw new Error('Attachment object not found');
-					}
-				} catch (error) {
-					try {
-						await updateAttachmentKeyStatus(
-							c,
-							attDataList,
-							attData.key,
-							attConst.status.FAILED,
-							'OBJECT_WRITE_FAILED'
-						);
-					} catch {
-						// The parent email is still SAVING/FAILED and these rows remain hidden.
-					}
-					try {
-						await failPendingAttachmentRows(c, attDataList);
-					} catch {
-						// D1 is unavailable; the parent send path keeps these rows inaccessible.
-					}
-					throw error;
+			await storeSendObjects(c, attDataList, [...objectByKey.values()], async attData => {
+				if (attData.buff) {
+					await r2Service.putObj(c, attData.key, attData.buff, {
+						contentType: attachmentMimeType(attData),
+						cacheControl: `max-age=259200`,
+						contentDisposition: 'inline'
+					});
+				} else if (!await r2Service.exists(c, attData.key)) {
+					throw new Error('Attachment object not found');
 				}
-
-				await updateAttachmentKeyStatus(
-					c,
-					attDataList,
-					attData.key,
-					attConst.status.READY
-				);
-			}
+			});
 		} finally {
 			for (const attData of attDataList) {
 				delete attData.buff;

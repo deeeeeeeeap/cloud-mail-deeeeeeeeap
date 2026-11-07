@@ -9,6 +9,7 @@ import r2Service from './service/r2-service';
 import maintenanceService from './service/maintenance-service';
 import authRateLimitService from './service/auth-rate-limit-service';
 import deliveryAttemptService from './service/delivery-attempt-service';
+import apiKeyService from './service/api-key-service';
 import { withSecurityHeaders } from './security/response-security';
 
 async function objectResponse(c, key) {
@@ -72,6 +73,7 @@ export default {
 		await runScheduledTask('delivery-attempt-reconcile', () => deliveryAttemptService.reconcile({ env }, { limit: 2 }))
 		await runScheduledTask('clear-unbound-oauth-users', () => oauthService.clearNoBindOathUser({ env }))
 		await runScheduledTask('clear-expired-auth-failures', () => authRateLimitService.clearExpired({ env }))
+		await runScheduledTask('clear-expired-api-usage', () => apiKeyService.clearExpired({ env }))
 		if (isEnabled(env.code_clear_stale_cron)) {
 			await runScheduledTask('codes-clear-stale', () => maintenanceService.clearStaleCodes({ env }, {
 				staleMinutes: env.code_stale_minutes

@@ -153,6 +153,7 @@
 | `CORS_ORIGINS` | 可选 | 额外跨域来源 JSON 数组字符串 |
 | `RESEND_WEBHOOK_SECRET` | 推荐 | Resend webhook 签名密钥 |
 | `RESEND_WEBHOOK_ALLOW_UNSIGNED` | 可选 | 仅兼容旧部署时填 `true` |
+| `public_send_hourly_limit` | 可选 | 全站公开发信接口每小时上限，默认 `100`，`0` 表示不限制；每个 API 密钥还可以在后台单独限额 |
 | `AI_MODEL` | 可选 | Workers AI 兜底识别模型 |
 | `ANALYSIS_CACHE` | 可选 | 分析页缓存开关 |
 | `CF_EMAIL` | 可选 | 是否启用 Cloudflare Email 发信绑定 |
@@ -313,49 +314,75 @@ npx pnpm@10.11.1 --prefix mail-vue audit
 
 ## 📮 公开自动化发件接口
 
-`POST /api/public/sendEmail` 适合自动化脚本使用。先通过现有的 `POST /api/public/genToken` 获取公共令牌，然后把令牌原样放入 `Authorization` 请求头，不要添加 `Bearer` 前缀。
+`POST /api/public/sendEmail` 供脚本和外部服务自动发信。推荐在管理后台 **「API 密钥」** 页面为每个脚本单独创建密钥：密钥以 `cmk_` 开头，只在创建或轮换时显示一次，数据库只保存 SHA-256 摘要。每个密钥可以分别设置：
+
+- **权限范围**：`send`（发信、查询投递状态）、`read`（`/api/public/emailList`）、`users`（`/api/public/addUser`）。
+- **邮箱范围**：完整地址或 `*@域名`。发信只能使用这些邮箱，读信只返回这些邮箱收发的邮件；留空表示不限制。
+- **限额与生命周期**：独立的每小时/每日发信上限（`0` 表示不单独限制）、有效期，以及随时停用、轮换、删除。停用和删除最迟 15 秒内在所有边缘实例生效。
+
+密钥可以放在任一请求头：`Authorization: Bearer cmk_...`、`Authorization: cmk_...` 或 `X-API-Key: cmk_...`。页面内置 cURL / Python / Node.js / PowerShell 示例，可直接复制。
 
 ```bash
 curl -X POST "https://mail.example.com/api/public/sendEmail" \
+  -H "Authorization: Bearer cmk_your_api_key" \
   -H "Content-Type: application/json" \
-  -H "Authorization: YOUR_PUBLIC_TOKEN" \
+  -H "Idempotency-Key: order-1001" \
   -d '{
     "sendEmail": "noreply@example.com",
     "receiveEmail": ["recipient@example.com"],
+    "cc": ["manager@example.com"],
+    "bcc": ["audit@example.com"],
+    "replyTo": "support@example.com",
     "subject": "自动化通知",
-    "content": "<p>任务已完成</p>",
     "text": "任务已完成",
     "name": "Cloud Mail",
     "attachments": [
-      {
-        "filename": "report.pdf",
-        "contentType": "application/pdf",
-        "content": "JVBERi0xLjQK"
-      }
+      { "filename": "report.pdf", "contentType": "application/pdf", "content": "JVBERi0xLjQK" }
     ]
   }'
 ```
 
-成功响应中的 `data` 直接沿用现有发件链路，类型为邮件结果数组：
+| 字段 | 说明 |
+| --- | --- |
+| `sendEmail` | 发件邮箱，必须是本站已存在且未删除的账号，并受密钥邮箱范围约束；账号所有者被禁用时拒绝发送 |
+| `receiveEmail` / `cc` / `bcc` | 收件人、抄送、密送数组，三者合计最多 10 个；重复地址（不区分大小写）自动去重。全部为站内地址时直接投递，密送名单不会出现在任何收件副本里 |
+| `replyTo` | 回复地址，字符串或最多 5 个地址的数组，对站外投递生效；Cloudflare 原生发信只接受 1 个地址，多个地址会在写库前返回 `400` |
+| `subject` | 主题，最多 998 个字符 |
+| `content` / `text` | HTML 与纯文本正文，至少提供一个。只给 `text` 时自动生成转义后的 HTML（保留换行），只给 `content` 时自动提取纯文本，两类邮件客户端都能正常显示 |
+| `attachments` | 附件数组，`content` 为标准 Base64 或 `data:*;base64,...` |
+| `idempotencyKey` | 与 `Idempotency-Key` 请求头等价，见下文 |
+
+成功响应的 `data` 是精简后的邮件结果数组，不再回显正文和附件存储键：
 
 ```json
 {
   "code": 200,
   "message": "success",
   "data": [
-    {
-      "emailId": 123,
-      "status": 6
-    }
+    { "emailId": 123, "status": 1, "statusName": "sent", "sendEmail": "noreply@example.com", "resendEmailId": "..." }
   ]
 }
 ```
 
+**幂等重试**：带上 `Idempotency-Key`（1–255 个可见 ASCII 字符，24 小时内有效）后，同一密钥重复提交相同请求会直接返回首次结果，并附带 `Idempotent-Replayed: true` 响应头，不会重复发信。规则如下：
+
+- 首次请求的投递结果未知（`502`）时，重试只会拿到同一个 `502`，不会再次外发。
+- 首次请求在写入邮件前失败（参数、权限、限额等），或邮件已被明确判定为发送失败（状态为 `failed`，例如服务商拒收），说明一封都没有发出，该键会被释放，修正后可以用同一个键重试。
+- 相同的键配不同请求体返回 `422`；首次请求仍在处理时返回 `409`。
+
+**投递状态**：`GET /api/public/emailStatus?emailIds=123,124`（或 `POST` JSON `{"emailIds":[123,124]}`，一次最多 50 个）返回 `statusName`（`sent` / `delivered` / `bounced` / `complained` / `delayed` / `pending` / `unknown` / `failed`）、供应商消息 ID 和外发记录状态。不存在或超出密钥邮箱范围的 ID 会列在 `notFound` 中。
+
+**读取邮件**：`POST /api/public/emailList` 新增 `afterId` 游标。传入上次拿到的最大 `emailId`，即可按 ID 升序拉取更新的邮件，适合轮询新邮件。
+
+**限额**：设置了每小时上限的密钥会在响应头返回 `X-RateLimit-Limit` 和 `X-RateLimit-Remaining`。所有公开发信（包括旧版令牌）还共享一个全站每小时上限，默认 100 次，可通过 Worker 变量 `public_send_hourly_limit` 调整（`0` 表示不限制）。密钥自身限额触发时返回 `429`，并会退还已占用的全站名额。
+
+**旧版公共令牌**：`POST /api/public/genToken`（用管理员邮箱和密码换取，30 天有效、全站只有一个、拥有全部权限）继续兼容。迁移到 API 密钥后，可以在「API 密钥」页面一键吊销旧令牌。
+
 附件 `content` 支持标准 Base64，也兼容 `data:*;base64,...`。文件名会去除路径和控制字符；`contentType` 缺失或不合法时使用 `application/octet-stream`。公开调用方传入的 `path`、`url`、`key`、`contentId`、`disposition`、`size` 等字段不会进入核心发件对象，附件仍通过受保护的下载接口访问。
 
-稳定性限制：`POST /api/email/send` 与 `POST /api/public/sendEmail` 共用同一套有界 JSON 读取和输入规范化。每次最多 10 个收件人和 10 个附件；单附件解码后最大 10 MiB，附件解码后合计最大 16 MiB；同步 JSON 请求体最大 24 MiB；HTML `content` 与纯文本 `text` 的 UTF-8 大小合计最大 1 MiB。公开接口不支持回复模式，且整个部署每小时最多调用 100 次。所有格式、收件人和大小校验都会在邮件、附件或对象写入前完成。站外发信还受实际通道限制：Cloudflare Email 整封邮件最大 5 MiB，Resend 整封邮件（附件 Base64 编码后）最大 40 MB，接口会在落库和调用供应商前明确拒绝超限邮件。发件开关、账号归属、角色权限、域名权限和发送额度仍由现有发件链路统一校验。
+稳定性限制：`POST /api/email/send` 与 `POST /api/public/sendEmail` 共用同一套有界 JSON 读取和输入规范化。每次最多 10 个收件人（收件人、抄送、密送合计）和 10 个附件；单附件解码后最大 10 MiB，附件解码后合计最大 16 MiB；同步 JSON 请求体最大 24 MiB；HTML `content` 与纯文本 `text` 的 UTF-8 大小合计最大 1 MiB。公开接口不支持回复模式。所有格式、收件人和大小校验都会在邮件、附件或对象写入前完成。站外发信还受实际通道限制：Cloudflare Email 整封邮件最大 25 MiB，Resend 整封邮件（附件 Base64 编码后）最大 40 MB，接口会在落库和调用供应商前明确拒绝超限邮件。发件开关、账号归属、角色权限、域名权限和发送额度仍由现有发件链路统一校验，角色额度按收件人、抄送、密送的总人数计算。
 
-计数语义：角色发件额度会在所有请求、权限、账号和供应商大小预检通过后，通过 D1 条件更新原子预留。预留后的附件存储失败、供应商失败或结果不确定仍计为一次发送尝试，避免供应商实际成功但客户端超时后退款并重复发送；预检阶段的 400/413 不计额度。公开接口的每小时 100 次限制同样使用 D1 原子小时桶，不再依赖 KV `get → put`。注册密钥也会先原子扣次，再以 D1 `batch()` 事务创建用户和主账号；创建失败时回滚用户数据并补回密钥次数。
+计数语义：角色发件额度会在所有请求、权限、账号和供应商大小预检通过后，通过 D1 条件更新原子预留。预留后的附件存储失败、供应商失败或结果不确定仍计为一次发送尝试，避免供应商实际成功但客户端超时后退款并重复发送；预检阶段的 400/413 不计额度。全站公开发信的小时上限和每个密钥的小时/日上限都使用 D1 原子计数桶，不依赖 KV `get → put`。注册密钥也会先原子扣次，再以 D1 `batch()` 事务创建用户和主账号；创建失败时回滚用户数据并补回密钥次数。
 
 收信附件恢复：历史附件 `status=0` 继续视为 `READY`，`1` 为 `UNUSED`，新写入使用 `PENDING=2` 和 `FAILED=3`。新附件会先在 D1 写入 `PENDING`，对象成功写入 R2/KV/S3 后才转 `READY`；普通下载、管理员下载、公开内嵌图片和附件列表都只接受 `READY`。一封入站邮件最多处理 10 个附件，只有全部附件 `READY`（或确实没有附件）时，父邮件才会从 `SAVING` 变为可见状态。恢复服务单次最多处理 2 封，定时任务为给同一 Workers invocation 的其他维护工作保留 Free 套餐 50 次 subrequest 余量，每轮只领取 1 封；同一邮件的附件状态按结果集合批量写回 D1，不再逐附件执行更新。每封邮件先通过 D1 条件更新取得 5 分钟恢复租约，重叠 cron 只有一个 runner 会探测对象。R2/S3 使用元数据探测，KV 读取后立即取消流；KV 首次空读至少延后 5 分钟后才允许再次确认，临时存储故障则退避 1 小时，避免最终一致性或并发任务把有效对象误判为丢失。
 
@@ -371,14 +398,18 @@ LinuxDo OAuth：浏览器会先调用 `POST /api/oauth/linuxDo/authorize`，由 
 
 从旧版本升级后，请使用受初始化密钥保护的 `/api/init`，或在维护中心执行“修复 Schema”，以幂等创建 `public_send_rate_limit`、`auth_failure_limit`、`oauth_auth_state`、`oauth_bind_challenge`、`delivery_attempt`、`resend_webhook_event` 等新增安全/恢复表、附件恢复字段及所需索引；无需删除或迁移现有邮件、用户和附件。升级完成前，启动检查会把缺少新表、列、索引或必要唯一约束的数据库报告为 `ready=false`。如果历史 `oauth` 表中已经存在相同 `(platform, oauth_user_id)` 的重复身份，或异常的局部升级已在 `delivery_attempt` 中生成重复 attempt key、同一邮件或同一 provider message id 的重复记录，修复会在替换旧索引前以 `409` 明确停止，不会静默合并或先删除现有索引。请先人工核对并保留正确记录后再重新执行修复，避免错误绑定或重复外发。
 
+API 密钥相关的 `api_key`、`api_key_usage`、`api_idempotency` 表只服务可选的自动化接口：首次使用时自动幂等创建，`/api/init` 和维护中心「修复 Schema」也会补建，不影响启动就绪检查，旧部署升级后无需额外操作。
+
 | `code` | 含义 |
 | --- | --- |
 | `400` | 缺少参数、邮箱格式错误、收件人或内容超出限制、Webhook 结构错误，或 OAuth state / 一次性绑定令牌无效或过期 |
-| `401` | 公共令牌缺失或错误，或 Resend Webhook 签名缺失/无效 |
-| `403` | 发件或 LinuxDo OAuth 开关关闭，或账号角色、域名、额度不允许发送 |
+| `401` | 公共令牌或 API 密钥缺失、错误、已停用或已过期，或 Resend Webhook 签名缺失/无效 |
+| `403` | 发件或 LinuxDo OAuth 开关关闭；账号角色、域名、额度不允许发送；API 密钥缺少对应权限范围，或发件地址不在密钥邮箱范围内 |
 | `404` | 发件邮箱账号不存在或已删除 |
+| `409` | 同一个 `Idempotency-Key` 的首次请求仍在处理或曾被中断 |
 | `413` | 发信或认证 JSON 请求体、Webhook 正文、单附件、附件合计或实际发信通道大小超限 |
-| `429` | 已达到公共发件每小时 100 次限制、OAuth state 签发上限，或认证失败次数触发临时锁定 |
+| `422` | 同一个 `Idempotency-Key` 被用于不同的请求体 |
+| `429` | 已达到全站公开发信小时上限、API 密钥的小时/日上限、OAuth state 签发上限，或认证失败次数触发临时锁定 |
 | `501` | 现有发件链路返回的其他业务错误，例如未配置站外发信通道 |
 | `502` | 外部投递结果无法确定；不要自动重试，应在维护中心和供应商后台人工核对 |
 

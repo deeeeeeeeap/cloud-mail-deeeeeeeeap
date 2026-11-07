@@ -11,6 +11,7 @@ vi.mock('../src/init/init', () => ({
 		v3_6DB: vi.fn(),
 		v3_7DB: vi.fn(),
 		v3_8DB: vi.fn(),
+		v3_9DB: vi.fn(),
 		invalidateBootstrapStatus: vi.fn(),
 		runOptionalSqlList: vi.fn(),
 		runMigrationSteps: vi.fn(async steps => {
@@ -425,6 +426,7 @@ describe('maintenance service', () => {
 
 		expect(dbInit.v3_7DB).toHaveBeenCalledWith(c);
 		expect(dbInit.v3_8DB).toHaveBeenCalledWith(c);
+		expect(dbInit.v3_9DB).toHaveBeenCalledWith(c);
 		expect(dbInit.assertBootstrapReady).toHaveBeenCalledWith(c);
 		expect(dbInit.invalidateBootstrapStatus).toHaveBeenCalledTimes(2);
 	});

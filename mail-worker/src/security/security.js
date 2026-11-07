@@ -1,13 +1,13 @@
 import BizError from '../error/biz-error';
 import constant from '../const/constant';
 import jwtUtils from '../utils/jwt-utils';
-import KvConst from '../const/kv-const';
 import dayjs from 'dayjs';
 import userService from '../service/user-service';
 import permService from '../service/perm-service';
 import emailUtils from '../utils/email-utils';
 import { t } from '../i18n/i18n'
 import authInfoCache from './auth-info-cache';
+import apiKeyService from '../service/api-key-service';
 import app from '../hono/hono';
 
 const exclude = [
@@ -66,7 +66,13 @@ const requirePerms = [
 	'/regKey/list',
 	'/regKey/delete',
 	'/regKey/clearNotUse',
-	'/regKey/history'
+	'/regKey/history',
+	'/apiKey/list',
+	'/apiKey/add',
+	'/apiKey/set',
+	'/apiKey/rotate',
+	'/apiKey/delete',
+	'/apiKey/legacyToken'
 ];
 
 const premKey = {
@@ -97,6 +103,8 @@ const premKey = {
 	'reg-key:add': ['/regKey/add'],
 	'reg-key:query': ['/regKey/list','/regKey/history'],
 	'reg-key:delete': ['/regKey/delete','/regKey/clearNotUse'],
+	// 没有角色会被授予该权限键，因此 API 密钥管理实际上只对配置的管理员开放
+	'api-key:manage': ['/apiKey/list', '/apiKey/add', '/apiKey/set', '/apiKey/rotate', '/apiKey/delete', '/apiKey/legacyToken'],
 };
 
 app.use('*', async (c, next) => {
@@ -110,12 +118,9 @@ app.use('*', async (c, next) => {
 	}
 
 	if (path.startsWith('/public')) {
-
-		const userPublicToken = await c.env.kv.get(KvConst.PUBLIC_KEY);
-		const publicToken = c.req.header(constant.TOKEN_HEADER);
-		if (publicToken !== userPublicToken) {
-			throw new BizError(t('publicTokenFail'), 401);
-		}
+		const principal = await apiKeyService.authenticate(c);
+		apiKeyService.assertScope(principal, apiKeyService.routeScope(path));
+		c.set('apiPrincipal', principal);
 		return await next();
 	}
 
@@ -143,7 +148,7 @@ app.use('*', async (c, next) => {
 
 	if (permIndex > -1) {
 
-		const permKeys = await permService.userPermKeys(c, authInfo.user.userId);
+		const permKeys = await permService.userPermKeys(c, authInfo.user.userId, authInfo.user.type);
 
 		const userPaths = permKeyToPaths(permKeys);
 
@@ -165,7 +170,7 @@ app.use('*', async (c, next) => {
 			authInfo.user = safeUser;
 		}
 		// 每日刷新不影响本次响应，后台化；缓存同步刷新防同 isolate 重复触发
-		authInfoCache.refresh(c, userId, authInfo).catch(() => {});
+		c.executionCtx.waitUntil(authInfoCache.refresh(c, userId, authInfo).catch(() => {}));
 		c.executionCtx.waitUntil(userService.updateUserInfo(c, authInfo.user.userId));
 	}
 

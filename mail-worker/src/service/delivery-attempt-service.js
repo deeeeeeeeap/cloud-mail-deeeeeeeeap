@@ -300,29 +300,35 @@ const deliveryAttemptService = {
 
 		// 三段各自持有 batchLimit，不再共用一份额度：共用时只要每轮都有 batchLimit 条 stale 记录，
 		// 后两段就恒定分到 0，PENDING_ACK 转正和有证据的 UNKNOWN 收敛会被无限期饿死
+		// CROSS JOIN 固定每个分支的驱动表：PENDING_ACK 从状态索引取，ACCEPTED/FAILED 只从仍为 SAVING 的发件取；
+		// 原来的 OR 写法每轮都会遍历全部发件
 		const { results: attempts = [] } = await c.env.db.prepare(`
-			SELECT
-				da.attempt_id AS attemptId,
-				da.email_id AS emailId,
-				da.provider,
-				da.status,
-				da.provider_message_id AS providerMessageId,
-				e.status AS emailStatus
-			FROM delivery_attempt da
-			JOIN email e ON e.email_id = da.email_id
-			WHERE e.type = ?
-			  AND (
-				da.status = ?
-				OR (da.status IN (?, ?) AND e.status = ?)
-			  )
-			ORDER BY da.attempt_id
+			SELECT * FROM (
+				SELECT
+					da.attempt_id AS attemptId,
+					da.email_id AS emailId,
+					da.provider,
+					da.status,
+					da.provider_message_id AS providerMessageId,
+					e.status AS emailStatus
+				FROM delivery_attempt da
+				CROSS JOIN email e ON e.email_id = da.email_id AND e.type = ?
+				WHERE da.status = ?
+				UNION ALL
+				SELECT da.attempt_id, da.email_id, da.provider, da.status, da.provider_message_id, e.status
+				FROM email e
+				CROSS JOIN delivery_attempt da ON da.email_id = e.email_id
+				WHERE e.type = ? AND e.status = ? AND da.status IN (?, ?)
+			)
+			ORDER BY attemptId
 			LIMIT ${batchLimit}
 		`).bind(
 			emailConst.type.SEND,
 			deliveryAttemptConst.status.PENDING_ACK,
+			emailConst.type.SEND,
+			emailConst.status.SAVING,
 			deliveryAttemptConst.status.ACCEPTED,
-			deliveryAttemptConst.status.FAILED,
-			emailConst.status.SAVING
+			deliveryAttemptConst.status.FAILED
 		).all();
 
 		for (const attempt of attempts) {

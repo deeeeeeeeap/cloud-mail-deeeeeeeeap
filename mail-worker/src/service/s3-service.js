@@ -1,8 +1,18 @@
-import { S3Client, PutObjectCommand, DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import settingService from './setting-service';
 import domainUtils from '../utils/domain-uitls';
 import { settingConst } from '../const/entity-const';
 import { isBrowserSafeHeaderValue, setBrowserSafeHeader } from '../utils/http-header-utils';
+
+let s3SdkPromise = null;
+
+// AWS SDK 顶层求值很重，只在实际走 S3 存储时才加载，不拖慢每次冷启动
+function loadS3Sdk() {
+	s3SdkPromise ??= import('./s3-sdk').catch(e => {
+		s3SdkPromise = null;
+		throw e;
+	});
+	return s3SdkPromise;
+}
 
 function isMissingObjectError(error) {
 	return error?.$metadata?.httpStatusCode === 404
@@ -28,6 +38,7 @@ const s3Service = {
 	async putObj(c, key, content, metadata) {
 
 		const client = await this.client(c);
+		const { PutObjectCommand } = await loadS3Sdk();
 
 		const { bucket } = await settingService.query(c);
 
@@ -59,6 +70,7 @@ const s3Service = {
 		}
 
 		const client = await this.client(c);
+		const { DeleteObjectsCommand } = await loadS3Sdk();
 		const { bucket } = await settingService.query(c);
 
 
@@ -96,6 +108,7 @@ const s3Service = {
 
 	async getObj(c, key) {
 		const client = await this.client(c);
+		const { GetObjectCommand } = await loadS3Sdk();
 		const { bucket } = await settingService.query(c);
 		try {
 			const result = await client.send(new GetObjectCommand({
@@ -114,6 +127,7 @@ const s3Service = {
 
 	async exists(c, key, options = {}) {
 		const client = await this.client(c, options);
+		const { HeadObjectCommand } = await loadS3Sdk();
 		const { bucket } = await settingService.query(c);
 		try {
 			await client.send(new HeadObjectCommand({
@@ -144,6 +158,7 @@ const s3Service = {
 		if (Number.isInteger(options.maxAttempts) && options.maxAttempts > 0) {
 			clientOptions.maxAttempts = options.maxAttempts;
 		}
+		const { S3Client } = await loadS3Sdk();
 		return new S3Client(clientOptions);
 	}
 }

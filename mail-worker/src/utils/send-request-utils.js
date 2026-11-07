@@ -8,6 +8,7 @@ export const SEND_CONTENT_MAX_BYTES = 1024 * 1024;
 export const SEND_MAX_ATTACHMENTS = 10;
 export const SEND_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 export const SEND_ATTACHMENTS_MAX_BYTES = 16 * 1024 * 1024;
+export const SEND_MAX_REPLY_TO = 5;
 
 const DEFAULT_ATTACHMENT_CONTENT_TYPE = 'application/octet-stream';
 const MIME_TYPE_PATTERN = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/;
@@ -60,14 +61,63 @@ export function normalizeSendRequest(params, { dedupeRecipients = false } = {}) 
 		throw new BizError('content exceeds 1MB', 400);
 	}
 
+	let normalizedTo = [...receiveEmail];
+	let cc = normalizeRecipientList(params.cc, 'cc');
+	let bcc = normalizeRecipientList(params.bcc, 'bcc');
+	if (dedupeRecipients) {
+		const seen = new Set();
+		const keep = address => {
+			const normalized = address.toLowerCase();
+			if (seen.has(normalized)) return false;
+			seen.add(normalized);
+			return true;
+		};
+		normalizedTo = normalizedTo.filter(keep);
+		cc = cc.filter(keep);
+		bcc = bcc.filter(keep);
+	}
+	if (normalizedTo.length + cc.length + bcc.length > SEND_MAX_RECIPIENTS) {
+		throw new BizError('receiveEmail, cc and bcc must contain no more than 10 recipients in total', 400);
+	}
+
 	return {
 		...params,
-		receiveEmail: dedupeRecipients ? [...new Set(receiveEmail)] : [...receiveEmail],
+		receiveEmail: normalizedTo,
+		cc,
+		bcc,
+		replyTo: normalizeReplyTo(params.replyTo),
 		subject,
 		content: contentValue,
 		text: textValue,
 		attachments: normalizeSendAttachments(params.attachments)
 	};
+}
+
+function normalizeRecipientList(value, field) {
+	if (value === undefined || value === null) {
+		return [];
+	}
+	if (!Array.isArray(value)) {
+		throw new BizError(`${field} must be an array`, 400);
+	}
+	if (value.some(email => typeof email !== 'string' || !verifyUtils.isEmail(email))) {
+		throw new BizError(`invalid ${field} email`, 400);
+	}
+	return [...value];
+}
+
+function normalizeReplyTo(value) {
+	if (value === undefined || value === null || value === '') {
+		return [];
+	}
+	const list = Array.isArray(value) ? value : [value];
+	if (list.length > SEND_MAX_REPLY_TO) {
+		throw new BizError(`replyTo must contain no more than ${SEND_MAX_REPLY_TO} addresses`, 400);
+	}
+	if (list.some(email => typeof email !== 'string' || !verifyUtils.isEmail(email))) {
+		throw new BizError('invalid replyTo email', 400);
+	}
+	return [...new Set(list)];
 }
 
 export function normalizeSendAttachments(value) {

@@ -106,6 +106,24 @@ const analysisDao = {
                 date ASC
         `).bind(offset, inverse, type).all();
 		return results;
+	},
+
+	// 当天（UTC）已发出邮件的收件人数，按 to + cc + bcc 计；SAVING 与 FAILED 不计
+	async daySendTotal(c) {
+		const row = await c.env.db.prepare(`
+            SELECT COALESCE(SUM(
+                (CASE WHEN json_valid(recipient) THEN json_array_length(recipient) ELSE 1 END)
+                + (CASE WHEN json_valid(cc) THEN json_array_length(cc) ELSE 0 END)
+                + (CASE WHEN json_valid(bcc) THEN json_array_length(bcc) ELSE 0 END)
+            ), 0) AS total
+            FROM
+                email
+            WHERE
+                type = ?1
+                AND create_time >= DATE('now')
+                AND status NOT IN (?2, ?3)
+        `).bind(emailConst.type.SEND, emailConst.status.SAVING, emailConst.status.FAILED).first();
+		return Number(row?.total) || 0;
 	}
 
 };

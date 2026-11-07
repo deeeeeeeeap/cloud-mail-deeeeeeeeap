@@ -73,7 +73,7 @@ The refreshed interface combines navy navigation, a paper-like workspace and con
 
 - **🔔 Email Push**: Forward received emails to Telegram bots or other email providers.
 
-- **📡 Open API**: Supports batch user creation via API and multi-condition email queries
+- **📡 Open API**: Automated sending through `POST /api/public/sendEmail` with per-script API keys (scopes, mailbox range, hourly/daily limits, expiry, rotation), `Idempotency-Key` safe retries, cc/bcc/reply-to, delivery status lookups via `/api/public/emailStatus`, plus batch user creation and multi-condition email queries with an `afterId` cursor. Keys are managed on the admin **API Keys** page.
 
 - **🔢 Verification Code Recognition**: Local rules recognize multilingual labels, full-width characters and grouped digits without AI fees. Links, email addresses, common quoted replies and hidden HTML are excluded; successful plain-text extraction skips HTML parsing. Workers AI remains an optional fallback.
 

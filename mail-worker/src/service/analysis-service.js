@@ -69,7 +69,7 @@ const analysisService = {
 			userDayCountRaw,
 			receiveDayCountRaw,
 			sendDayCountRaw,
-			daySendTotalRaw
+			daySendTotal
 		] = await Promise.all([
 			analysisDao.numberCount(c),
 
@@ -80,15 +80,13 @@ const analysisService = {
 			analysisDao.receiveDayCount(c, diffHours),
 			analysisDao.sendDayCount(c, diffHours),
 
-			c.env.kv.get(kvConst.SEND_DAY_COUNT + dayjs().format('YYYY-MM-DD')),
+			analysisDao.daySendTotal(c),
 		]);
 
 
 		const userDayCount = this.filterEmptyDay(userDayCountRaw, timeZone);
 		const receiveDayCount = this.filterEmptyDay(receiveDayCountRaw, timeZone);
 		const sendDayCount = this.filterEmptyDay(sendDayCountRaw, timeZone);
-
-		const daySendTotal = daySendTotalRaw || 0;
 
 		return {
 			numberCount,

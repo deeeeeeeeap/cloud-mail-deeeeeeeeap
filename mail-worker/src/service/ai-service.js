@@ -311,7 +311,12 @@ const NEGATIVE_CONTEXT_RE = buildRe([
 	'\\u6d4f\\u89c8\\u5668',
 	'\\u0437\\u0430\\u043a\\u0430\\u0437'
 ]);
-const URL_OR_EMAIL_RE = /(?:https?:\/\/|www\.)\S+|\b\S+@\S+\b/i;
+const URL_RE = /(?:https?:\/\/|www\.)\S+/gi;
+const WORD_CHAR_RE = /[A-Za-z0-9_]/;
+const WHITESPACE_RE = /\s/;
+const SENTENCE_DELIMITERS = new Set(['.', '!', '?', ';', '\n', '\u3002', '\uff1b', '\uff01', '\uff1f']);
+const BLOCK_OPEN_RE = /<(?:style|script|title)\b/gi;
+const BLOCK_CLOSE_RE = /<\/(?:style|script|title)>/gi;
 const CODE_TOKEN_RE = /(^|[^A-Za-z0-9])([A-Za-z0-9]{4,8})(?=$|[^A-Za-z0-9])/g;
 // Only join deliberate groups, not a code followed by its validity period.
 const SEPARATED_DIGIT_CODE_RE = /(^|[^A-Za-z0-9])(?:((?:\d{3}[ \t-]+\d{3}|\d{4}[ \t-]+\d{4}|\d{2}(?:[ \t-]+\d{2}){1,3}|\d(?:[ \t-]+\d){3,7})))(?=$|[^A-Za-z0-9])/g;
@@ -353,14 +358,36 @@ function quickHtmlText(html) {
 		return '';
 	}
 	// Strip css/js blocks before slicing so style-heavy emails do not push the
-	// readable text outside the quick window. The raw input is pre-capped to
-	// keep the block regex cheap on huge emails.
-	return String(html)
-		.slice(0, QUICK_HTML_LIMIT * 6)
-		.replace(/<(?:style|script|title)\b[^>]*>[\s\S]*?<\/(?:style|script|title)>/gi, ' ')
+	// readable text outside the quick window.
+	return stripTextlessBlocks(String(html).slice(0, QUICK_HTML_LIMIT * 6))
 		.slice(0, QUICK_HTML_LIMIT)
 		.replace(/<[^>]*>/g, ' ')
 		.replace(/&(?:nbsp|amp|lt|gt|quot|apos|#\d+);/gi, ' ');
+}
+
+// Linear equivalent of replacing /<(style|script|title)\b[^>]*>[\s\S]*?<\/(style|script|title)>/gi
+// with ' '; the regex form is quadratic when many blocks are left unclosed.
+function stripTextlessBlocks(html) {
+	const closes = [];
+	BLOCK_CLOSE_RE.lastIndex = 0;
+	let match;
+	while ((match = BLOCK_CLOSE_RE.exec(html)) !== null) {
+		closes.push([match.index, match.index + match[0].length]);
+	}
+	let out = '';
+	let cursor = 0;
+	let closeIndex = 0;
+	BLOCK_OPEN_RE.lastIndex = 0;
+	while ((match = BLOCK_OPEN_RE.exec(html)) !== null) {
+		const tagEnd = html.indexOf('>', match.index);
+		if (tagEnd === -1) break;
+		while (closeIndex < closes.length && closes[closeIndex][0] <= tagEnd) closeIndex++;
+		if (closeIndex === closes.length) break;
+		out += html.slice(cursor, match.index) + ' ';
+		cursor = closes[closeIndex][1];
+		BLOCK_OPEN_RE.lastIndex = cursor;
+	}
+	return out + html.slice(cursor);
 }
 
 export function normalizeCodeToken(token) {
@@ -390,6 +417,7 @@ function collectHintPositions(text) {
 
 function collectCodeCandidates(text) {
 	const candidates = [];
+	const urlOrEmailSpans = collectUrlOrEmailSpans(text);
 	for (const tokenRe of [SEPARATED_DIGIT_CODE_RE, CODE_TOKEN_RE]) {
 		tokenRe.lastIndex = 0;
 		let match;
@@ -397,7 +425,7 @@ function collectCodeCandidates(text) {
 			const raw = match[2];
 			const code = normalizeCodeToken(raw);
 			const index = match.index + match[1].length;
-			if (code && !insideUrlOrEmail(text, index)) {
+			if (code && !insideSpans(urlOrEmailSpans, index)) {
 				candidates.push({
 					code,
 					raw,
@@ -419,20 +447,38 @@ function lineAround(text, index) {
 // Penalize only tokens that are part of a url or email address. Merely sharing
 // a line with one (e.g. "Hi user@example.com, your code is 483920") is normal
 // in verification emails and must not sink the real code.
-function insideUrlOrEmail(text, index) {
-	const start = Math.max(text.lastIndexOf('\n', index - 1) + 1, 0);
-	const endIndex = text.indexOf('\n', index);
-	const end = endIndex === -1 ? text.length : endIndex;
-	const line = text.slice(start, end);
-	const re = new RegExp(URL_OR_EMAIL_RE.source, 'ig');
+// Same spans as /(?:https?:\/\/|www\.)\S+|\b\S+@\S+\b/, collected once per text in linear time;
+// that regex backtracks quadratically on long runs without "@" and used to rerun for every candidate.
+export function collectUrlOrEmailSpans(text) {
+	const spans = [];
+	URL_RE.lastIndex = 0;
 	let match;
-	while ((match = re.exec(line)) !== null) {
-		const matchStart = start + match.index;
-		if (index >= matchStart && index < matchStart + match[0].length) {
-			return true;
-		}
+	while ((match = URL_RE.exec(text)) !== null) {
+		spans.push([match.index, match.index + match[0].length]);
 	}
-	return false;
+	let at = text.indexOf('@');
+	while (at !== -1) {
+		let start = at;
+		while (start > 0 && !WHITESPACE_RE.test(text[start - 1])) start--;
+		let end = at + 1;
+		while (end < text.length && !WHITESPACE_RE.test(text[end])) end++;
+		// Inside one whitespace-free run the match starts at the first word char, ends after the
+		// last one, and needs an "@" with at least one char on each side in between.
+		let first = start;
+		while (first < end && !WORD_CHAR_RE.test(text[first])) first++;
+		let last = end;
+		while (last > first && !WORD_CHAR_RE.test(text[last - 1])) last--;
+		const lastAt = last >= 2 ? text.lastIndexOf('@', last - 2) : -1;
+		if (lastAt > first) {
+			spans.push([first, last]);
+		}
+		at = text.indexOf('@', end);
+	}
+	return spans;
+}
+
+function insideSpans(spans, index) {
+	return spans.some(([start, end]) => index >= start && index < end);
 }
 
 function windowAround(text, index, radius = 100) {
@@ -445,7 +491,7 @@ function nearestDistance(positions, index) {
 	}, Number.POSITIVE_INFINITY);
 }
 
-function looksLikeDateOrVersion(code, line) {
+function looksLikeDateOrVersionCode(code) {
 	if (/^\d{4}$/.test(code)) {
 		const year = Number(code);
 		if (year >= 1900 && year <= 2099) {
@@ -462,25 +508,73 @@ function looksLikeDateOrVersion(code, line) {
 		}
 	}
 
+	return false;
+}
+
+function lineLooksLikeDateOrVersion(line) {
 	return /\b\d{1,4}(?:[.-]\d{1,4}){1,3}\b/.test(line) && /(date|time|version|chrome|firefox|edge|safari|ip|\u65e5\u671f|\u65f6\u95f4|\u7248\u672c)/i.test(line);
 }
 
-function scoreCandidate(text, candidate, hintPositions, subjectLength) {
-	const code = candidate.code;
-	const line = lineAround(text, candidate.index);
-	const context = windowAround(text, candidate.index);
+// Line and sentence facts are shared by every candidate on them; recomputing them per candidate
+// made scoring quadratic on long single-line bodies.
+function createScoringContext(text, subjectLength) {
 	const subject = text.slice(0, subjectLength);
-	const subjectHasAuthPurpose = AUTH_PURPOSE_RE.test(subject);
-	const subjectHasWeakAuth = WEAK_AUTH_RE.test(subject);
+	const sentenceStarts = new Int32Array(text.length + 1);
+	for (let index = 0, start = 0; index <= text.length; index++) {
+		sentenceStarts[index] = start;
+		if (index < text.length && SENTENCE_DELIMITERS.has(text[index])) start = index + 1;
+	}
+	const sentenceEnds = new Int32Array(text.length + 1);
+	for (let index = text.length, end = text.length; index >= 0; index--) {
+		if (index < text.length && SENTENCE_DELIMITERS.has(text[index])) end = index;
+		sentenceEnds[index] = end;
+	}
+	return {
+		subjectLength,
+		subjectHasAuthPurpose: AUTH_PURPOSE_RE.test(subject),
+		subjectHasWeakAuth: WEAK_AUTH_RE.test(subject),
+		sentenceStarts,
+		sentenceEnds,
+		lines: new Map(),
+		sentences: new Map()
+	};
+}
+
+function lineFacts(ctx, text, index) {
+	const start = Math.max(text.lastIndexOf('\n', index - 1) + 1, 0);
+	let facts = ctx.lines.get(start);
+	if (!facts) {
+		const line = lineAround(text, index);
+		facts = { normalized: normalizeCodeToken(line), dateOrVersion: lineLooksLikeDateOrVersion(line) };
+		ctx.lines.set(start, facts);
+	}
+	return facts;
+}
+
+// A reference in another sentence must not disqualify the actual login code.
+function sentenceIsNegative(ctx, text, index) {
+	const start = ctx.sentenceStarts[index];
+	let negative = ctx.sentences.get(start);
+	if (negative === undefined) {
+		negative = NEGATIVE_CONTEXT_RE.test(text.slice(start, ctx.sentenceEnds[index]));
+		ctx.sentences.set(start, negative);
+	}
+	return negative;
+}
+
+function scoreCandidate(text, candidate, hintPositions, ctx) {
+	const code = candidate.code;
+	const subjectLength = ctx.subjectLength;
+	const { normalized: normalizedLine, dateOrVersion: lineDateOrVersion } = lineFacts(ctx, text, candidate.index);
+	const context = windowAround(text, candidate.index);
+	const subjectHasAuthPurpose = ctx.subjectHasAuthPurpose;
+	const subjectHasWeakAuth = ctx.subjectHasWeakAuth;
 	const subjectHasAuthIntent = subjectHasAuthPurpose || subjectHasWeakAuth;
 	const strongLabelNear = STRONG_CODE_LABEL_RE.test(context);
 	const directLabelNear = DIRECT_CODE_LABEL_RE.test(context);
 	const authPurposeNear = AUTH_PURPOSE_RE.test(context);
 	const actionNear = ACTION_RE.test(context);
-	// A reference in another sentence must not disqualify the actual login code.
-	const before = text.slice(0, candidate.index).split(/[.!?;\n。；！？]/).at(-1);
-	const after = text.slice(candidate.index).split(/[.!?;\n。；！？]/, 1)[0];
-	const negativeContext = NEGATIVE_CONTEXT_RE.test(before + after);
+	const negativeContext = sentenceIsNegative(ctx, text, candidate.index);
 	const nearestHintDistance = nearestDistance(hintPositions, candidate.index);
 	let score = 0;
 
@@ -513,7 +607,7 @@ function scoreCandidate(text, candidate, hintPositions, subjectLength) {
 	} else if (subjectHasWeakAuth && candidate.index > subjectLength && candidate.index < subjectLength + 1000) {
 		score += 30;
 	}
-	if (normalizeCodeToken(line) === code && (subjectHasAuthIntent || authPurposeNear || directLabelNear)) {
+	if (normalizedLine === code && (subjectHasAuthIntent || authPurposeNear || directLabelNear)) {
 		score += 70;
 	}
 	if (nearestHintDistance !== Number.POSITIVE_INFINITY) {
@@ -526,7 +620,7 @@ function scoreCandidate(text, candidate, hintPositions, subjectLength) {
 	if (negativeContext) {
 		score -= 150;
 	}
-	if (looksLikeDateOrVersion(code, line)) {
+	if (looksLikeDateOrVersionCode(code) || lineDateOrVersion) {
 		score -= 120;
 	}
 
@@ -545,10 +639,10 @@ function extractFromText(subject, body) {
 	}
 
 	const hintPositions = collectHintPositions(content);
-	const subjectLength = subject.length;
+	const ctx = createScoringContext(content, subject.length);
 	let best;
 	for (const candidate of candidates) {
-		const score = scoreCandidate(content, candidate, hintPositions, subjectLength);
+		const score = scoreCandidate(content, candidate, hintPositions, ctx);
 		if (!best || score > best.score || (score === best.score && candidate.index < best.index)) {
 			best = {...candidate, score};
 		}
@@ -577,7 +671,7 @@ const aiService = {
 			return '';
 		}
 
-		const patternCode = extractCodeByPattern(email);
+		const patternCode = options.patternChecked ? '' : extractCodeByPattern(email);
 		if (patternCode) {
 			return patternCode;
 		}

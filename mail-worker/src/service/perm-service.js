@@ -60,9 +60,8 @@ const permService = {
 		return cloneTree(setCache(cacheKey, pList));
 	},
 
-	async userPermKeys(c, userId) {
-		const userRow = c.get?.('user');
-		const cacheKey = `userPerm:${userId}:${userRow?.type || ''}`;
+	async userPermKeys(c, userId, userType = c.get?.('user')?.type) {
+		const cacheKey = `userPerm:${userId}:${userType ?? ''}`;
 		const cached = getCache(cacheKey);
 		if (cached) {
 			return [...cached];

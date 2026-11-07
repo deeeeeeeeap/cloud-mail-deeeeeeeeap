@@ -1,9 +1,11 @@
 import { env, SELF } from 'cloudflare:test';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import KvConst from '../src/const/kv-const';
+import BizError from '../src/error/biz-error';
 import settingService from '../src/service/setting-service';
 import publicService from '../src/service/public-service';
 import roleService from '../src/service/role-service';
+import emailService from '../src/service/email-service';
 
 const PUBLIC_TOKEN = 'public-send-test-token';
 const PDF_BASE64 = 'JVBERi0xLjQK';
@@ -420,19 +422,28 @@ describe('public send email API', () => {
 			WHERE role_id = 1
 		`).run();
 		roleService.clearCache();
+		// 接口层的附件上限让真实邮件到不了 25 MiB 的通道上限，这里直接让预检失败，只验证额度不被预留
+		const preflight = vi.spyOn(emailService, 'assertProviderMessageSize').mockImplementation(() => {
+			throw new BizError('Cloudflare Email message exceeds 25 MiB limit', 413);
+		});
 
-		const response = await sendEmail(validPayload({
-			receiveEmail: ['outside@example.net'],
-			attachments: [{
-				filename: 'provider-too-large.bin',
-				content: base64ForDecodedSize(4 * 1024 * 1024)
-			}]
-		}));
-		const body = await response.json();
+		let body;
+		try {
+			const response = await sendEmail(validPayload({
+				receiveEmail: ['outside@example.net'],
+				attachments: [{
+					filename: 'provider-too-large.bin',
+					content: base64ForDecodedSize(4 * 1024 * 1024)
+				}]
+			}));
+			body = await response.json();
+		} finally {
+			preflight.mockRestore();
+		}
 
 		expect(body).toMatchObject({
 			code: 413,
-			message: 'Cloudflare Email message exceeds 5 MiB limit'
+			message: 'Cloudflare Email message exceeds 25 MiB limit'
 		});
 		expect(await env.db.prepare(`
 			SELECT send_count AS sendCount
