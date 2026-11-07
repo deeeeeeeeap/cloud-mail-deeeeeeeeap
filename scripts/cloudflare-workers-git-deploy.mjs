@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { redactDeploymentOutput } from './deployment-output.mjs';
+import { RUN_WORKER_FIRST } from './static-asset-routing.mjs';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..');
@@ -64,7 +65,7 @@ const config = {
     binding: 'assets',
     directory: '../mail-worker/dist',
     not_found_handling: 'single-page-application',
-    run_worker_first: true
+    run_worker_first: [...RUN_WORKER_FIRST]
   },
   triggers: {
     crons: ['*/30 * * * *', '0 16 * * *']

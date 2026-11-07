@@ -98,17 +98,43 @@ test('Cloudflare Git deployment output redacts generated deployment URLs', async
   )
 })
 
-test('every supported Wrangler entry point sends static pages through the Worker', () => {
+test('every supported Wrangler entry point routes pages and dynamic paths through the Worker', async () => {
+  const { RUN_WORKER_FIRST } = await import('./static-asset-routing.mjs')
   const rootConfig = JSON.parse(readFileSync(resolve(repoRoot, 'wrangler.jsonc'), 'utf8'))
-  const tomlConfigs = [
-    'wrangler.toml',
-    'wrangler-dev.toml',
-    'wrangler-test.toml',
-    'wrangler-action.toml'
-  ].map(name => readFileSync(resolve(repoRoot, 'mail-worker', name), 'utf8'))
+  assert.deepEqual(rootConfig.assets.run_worker_first, [...RUN_WORKER_FIRST])
 
-  assert.equal(rootConfig.assets.run_worker_first, true)
-  for (const config of tomlConfigs) {
-    assert.match(config, /^run_worker_first = true(?:\s|$)/m)
+  for (const name of ['wrangler.toml', 'wrangler-dev.toml', 'wrangler-test.toml', 'wrangler-action.toml']) {
+    const config = readFileSync(resolve(repoRoot, 'mail-worker', name), 'utf8')
+    const declaration = config.match(/^run_worker_first = (\[.*\])\s*$/m)
+    assert.ok(declaration, `${name} must declare run_worker_first as an array`)
+    assert.deepEqual(JSON.parse(declaration[1]), [...RUN_WORKER_FIRST], name)
   }
+
+  assert.equal(RUN_WORKER_FIRST[0], '/*')
+  for (const dynamicPath of ['/api/*', '/static/*', '/attachments/*', '/index.html']) {
+    assert.ok(!RUN_WORKER_FIRST.includes(`!${dynamicPath}`), `${dynamicPath} must keep running the Worker`)
+  }
+})
+
+test('static assets served without the Worker carry the same security headers', () => {
+  const source = readFileSync(resolve(repoRoot, 'mail-worker/src/security/response-security.js'), 'utf8')
+  const cspSource = source.match(/const CONTENT_SECURITY_POLICY = \[([\s\S]*?)\]\.join\('; '\)/)
+  assert.ok(cspSource, 'CONTENT_SECURITY_POLICY must stay a joined array literal')
+  const expected = {
+    'Content-Security-Policy': [...cspSource[1].matchAll(/"([^"]+)"/g)].map(match => match[1]).join('; ')
+  }
+  for (const [, name, value] of source.matchAll(/headers\.set\('([^']+)', '([^']+)'\)/g)) {
+    expected[name] = value
+  }
+
+  const rules = readFileSync(resolve(repoRoot, 'mail-vue/public/_headers'), 'utf8').split(/\r?\n/)
+  const rootStart = rules.indexOf('/*')
+  assert.ok(rootStart >= 0, '_headers needs a /* rule')
+  const actual = {}
+  for (const line of rules.slice(rootStart + 1)) {
+    if (!/^\s+\S/.test(line)) break
+    const separator = line.indexOf(':')
+    actual[line.slice(0, separator).trim()] = line.slice(separator + 1).trim()
+  }
+  assert.deepEqual(actual, expected)
 })

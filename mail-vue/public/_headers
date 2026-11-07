@@ -1,6 +1,18 @@
+/*
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https:; script-src 'self' https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; media-src 'self' data: blob: https:; connect-src 'self' https:; frame-src 'self' blob: https://challenges.cloudflare.com; worker-src 'self' blob:; manifest-src 'self'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
 /assets/*
   Cache-Control: public, max-age=31556952, immutable
 /tinymce/*
-  Cache-Control: public, max-age=604800, immutable
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 /image/*
-  Cache-Control: public, max-age=604800, immutable
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/theme-bootstrap.js
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+/mail-pwa.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/mail.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
