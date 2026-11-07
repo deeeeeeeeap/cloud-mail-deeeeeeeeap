@@ -91,7 +91,7 @@ import {reactive, ref, watch, onMounted, onUnmounted} from "vue";
 import {useRouter} from 'vue-router'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {emailDelete, emailDetail, emailRead} from "@/request/email.js";
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import {useEmailStore} from "@/store/email.js";
 import {useAccountStore} from "@/store/account.js";
 import {formatDetailDate} from "@/utils/day.js";

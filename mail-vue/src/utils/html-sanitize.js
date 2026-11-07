@@ -6,6 +6,7 @@ const ALLOWED_ATTRS = new Set(('title alt width height align valign bgcolor bord
 const SAFE_PROPERTIES = new Set(('color background-color font font-family font-size font-style font-weight font-variant line-height letter-spacing word-spacing text-align text-decoration text-decoration-color text-decoration-line text-decoration-style text-indent text-transform white-space word-break overflow-wrap vertical-align display width min-width max-width height min-height max-height margin margin-top margin-right margin-bottom margin-left padding padding-top padding-right padding-bottom padding-left border border-width border-style border-color border-top border-right border-bottom border-left border-collapse border-spacing border-radius box-sizing table-layout list-style-type list-style-position position').split(' '));
 const SAFE_POSITIONS = new Set(['static', 'relative', 'initial', 'inherit', 'unset', 'revert']);
 const RASTER_DATA = /^data:image\/(?:png|jpe?g|gif|webp|avif|bmp|x-icon);base64,[a-z0-9+/=\s]+$/i;
+let styleProbe;
 
 export function isSafeImageData(value) {
   return RASTER_DATA.test(String(value || ''));
@@ -37,7 +38,10 @@ export function sanitizeStyleAttribute(style = '') {
     if (/(?:url|image(?:-set)?|cross-fade|element|paint|expression|var|env|attr)\s*\(/i.test(value)) continue;
     if (property === 'position' && !SAFE_POSITIONS.has(value.replace(/!\s*important\s*$/i, '').trim().toLowerCase())) continue;
     // CSSOM validates declaration syntax. Only emit properties we explicitly allow.
-    const parsed = document.createElement('span').style;
+    // The probe is emptied first so a rejected value cannot read back an earlier declaration.
+    styleProbe ??= document.createElement('span');
+    const parsed = styleProbe.style;
+    parsed.cssText = '';
     parsed.setProperty(property, value.replace(/!\s*important\s*$/i, '').trim());
     const normalized = parsed.getPropertyValue(property);
     if (normalized) declarations.push(`${property}: ${normalized}`);

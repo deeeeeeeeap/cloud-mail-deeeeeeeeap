@@ -113,7 +113,7 @@
 </template>
 <script setup>
 import UiSelect from "@/components/ui-select/index.vue";
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import {computed, nextTick, onMounted, onUnmounted, reactive, ref, watch} from "vue";
 import {
   accountList,

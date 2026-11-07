@@ -101,7 +101,7 @@ const props = defineProps({
     default: ''
   }
 })
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 </script>
 
 <style scoped lang="scss">

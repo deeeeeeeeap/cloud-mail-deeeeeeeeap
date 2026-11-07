@@ -10,9 +10,20 @@ export function inlineAttachmentKey(source) {
   return match ? match[1] : null;
 }
 
-export function prepareMailBody(html, { remoteImages = false, inlineUrls = new Map() } = {}) {
+// Sanitizing is the expensive step and depends only on the message, so inline image
+// batches and the remote-image toggle reuse it and only re-resolve <img> sources.
+export function createMailBody(html) {
+  const sanitized = sanitizeHtml(html);
+  return { prepare: options => prepareSanitizedBody(sanitized, options) };
+}
+
+export function prepareMailBody(html, options) {
+  return createMailBody(html).prepare(options);
+}
+
+function prepareSanitizedBody(sanitized, { remoteImages = false, inlineUrls = new Map() } = {}) {
   const template = document.createElement('template');
-  template.innerHTML = sanitizeHtml(html);
+  template.innerHTML = sanitized;
   const inlineKeys = new Set();
   let remoteCount = 0;
   for (const img of template.content.querySelectorAll('img')) {

@@ -5,11 +5,8 @@ import {loginUserInfo} from "@/request/my.js";
 import {permsToRouter} from "@/perm/perm.js";
 import router from "@/router";
 import {websiteConfig} from "@/request/setting.js";
-// cvtR2Url 必须静态导入：main.js 顶层 await init() 使入口 chunk 停在求值中途，
-// 若此处动态 import convert chunk，而 convert 静态引回入口 chunk（useSettingStore 被打进入口），
-// 会形成「入口等 convert 求值、convert 等入口求值」的 ES 模块死锁，页面永久卡在首屏 loading 且无任何报错
 import {cvtR2Url} from "@/utils/convert.js";
-import i18n, {detectLang, normalizeLang} from "@/i18n/index.js";
+import {detectLang, loadLocaleMessages, normalizeLang} from "@/i18n/index.js";
 import {
     clearAuthSession,
     getSessionGeneration,
@@ -37,7 +34,8 @@ export async function init() {
         settingStore.lang = normalizeLang(settingStore.lang)
     }
 
-    i18n.global.locale.value = settingStore.lang
+    // 当前语言包与下面的 API 并行加载
+    const localeReady = loadLocaleMessages(settingStore.lang)
 
     // 匿名回访与 API 并行加载登录背景；已登录用户不需要下载登录页图片。
     const prefetchedBackground = !token ? settingStore.lastBackgroundUrl : '';
@@ -53,7 +51,7 @@ export async function init() {
             error => ({error})
         );
 
-        const [s, userOutcome] = await Promise.all([websiteConfig(), userOutcomePromise]);
+        const [s, userOutcome] = await Promise.all([websiteConfig(), userOutcomePromise, localeReady]);
         setting = s;
         settingStore.settings = setting;
         settingStore.domainList = setting.domainList;
@@ -86,7 +84,7 @@ export async function init() {
 
     } else {
         resetSessionState();
-        setting = await websiteConfig();
+        [setting] = await Promise.all([websiteConfig(), localeReady]);
         settingStore.settings = setting;
         settingStore.domainList = setting.domainList;
         document.title = setting.title;

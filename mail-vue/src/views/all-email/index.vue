@@ -87,11 +87,12 @@ import {
   allEmailLatest,
   allEmailDetail
 } from "@/request/all-email.js";
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import router from "@/router/index.js";
 import {useI18n} from 'vue-i18n';
 import {toUtc} from "@/utils/day.js";
 import {sleepUntil, waitUntilVisible} from "@/utils/time-utils.js";
+import {createPollBackoff, trackUserActivity} from "@/utils/poll-backoff.js";
 import {createActiveTask} from "@/utils/active-task.js";
 import {useSettingStore} from "@/store/setting.js";
 import { useRoute } from 'vue-router'
@@ -296,7 +297,18 @@ onUnmounted(() => {
   latestTask.deactivate()
 })
 
+// 没有新邮件时逐步放慢轮询；用户操作、切回或聚焦页面、收到新邮件时立即恢复设置的间隔
 async function latest(signal) {
+  const backoff = createPollBackoff()
+  const stopTracking = trackUserActivity(() => backoff.activity())
+  try {
+    await pollLatest(signal, backoff)
+  } finally {
+    stopTracking()
+  }
+}
+
+async function pollLatest(signal, backoff) {
 
   while (!signal.aborted) {
 
@@ -304,7 +316,7 @@ async function latest(signal) {
 
     //自动刷新关闭时拉长空转间隔
     if (!await waitUntilVisible(signal)) return
-    if (!await sleepUntil(autoRefresh > 1 ? autoRefresh * 1000 : 30000, signal)) return
+    if (!await backoff.wait(autoRefresh > 1 ? autoRefresh * 1000 : 30000, signal)) return
 
     //页面在后台时暂停轮询
     if (!await waitUntilVisible(signal)) return
@@ -336,6 +348,7 @@ async function latest(signal) {
 
       const curTimeSort = params.timeSort
       let list = await allEmailLatest(latestId, {signal})
+      backoff.settle(list.length)
 
       if (list.length === 0) {
         continue
@@ -359,6 +372,7 @@ async function latest(signal) {
 
     } catch (e) {
       if (signal.aborted) return
+      backoff.settle(0)
       if (e.code === 401 || e.code === 403) {
         settingStore.settings.autoRefresh = 0;
       }

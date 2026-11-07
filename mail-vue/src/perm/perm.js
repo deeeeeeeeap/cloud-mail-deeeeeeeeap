@@ -128,5 +128,15 @@ const routers = {
             name: 'maintenance',
             menu: true
         }
+    }],
+    'api-key:manage': [{
+        path: '/api-keys',
+        name: 'api-key',
+        component: () => import('@/views/api-key/index.vue'),
+        meta: {
+            title: 'apiKeys',
+            name: 'api-key',
+            menu: true
+        }
     }]
 }

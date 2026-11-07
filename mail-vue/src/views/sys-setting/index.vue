@@ -781,7 +781,7 @@ import {useSettingStore} from "@/store/setting.js";
 import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
 import {useAccountStore} from "@/store/account.js";
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import {cvtR2Url} from "@/utils/convert.js";
 import {storeToRefs} from "pinia";
 import {debounce} from '@/utils/debounce.js'
@@ -796,15 +796,15 @@ import {
 } from "@/utils/background-image.js";
 import {useI18n} from 'vue-i18n';
 import axios from "axios";
-import packageInfo from "../../../package.json";
-import {isNewerStableRelease} from "@/utils/release-version.js";
+import {version} from "../../../package.json";
+import {isNewerStableRelease, readCachedRelease, writeCachedRelease} from "@/utils/release-version.js";
 
 defineOptions({
   name: 'sys-setting'
 })
 
 // 本项目自 3.0.0 从上游分叉后独立维护，版本号另起一条线，不跟随上游编号
-const currentVersion = `v${packageInfo.version}`
+const currentVersion = `v${version}`
 const projectRepo = 'https://github.com/deeeeeeeeap/cloud-mail-deeeeeeeeap'
 // 文件名是中文，走 GitHub blob 链接必须用百分号编码，否则部分客户端拼不出正确地址
 const projectDoc = projectRepo + '/blob/main/doc/%E9%83%A8%E7%BD%B2%E6%95%99%E7%A8%8B.md'
@@ -1006,15 +1006,23 @@ const resendList = computed(() => {
 
 function getUpdate() {
   if (getUpdateErrorCount > 5 || !getUpdateErrorCount) return
+  const cached = readCachedRelease()
+  if (cached) {
+    hasUpdate.value = isNewerStableRelease(cached.latest, currentVersion)
+    getUpdateErrorCount = 0
+    return
+  }
   axios.get(releaseApi).then(({data}) => {
     // release 标题可以留空，tag 一定有，优先用 tag
     const latest = data.tag_name || data.name
+    writeCachedRelease(latest)
     hasUpdate.value = isNewerStableRelease(latest, currentVersion)
     getUpdateErrorCount = 0
   }).catch(e => {
     // 一个 release 都没发过时 GitHub 返回 404。这是确定答案而非请求失败，
     // 当成「无更新」收手；照原逻辑重试只会每次进设置页白跑五轮并刷五条报错
     if (e.response?.status === 404) {
+      writeCachedRelease(null)
       getUpdateErrorCount = 0
       return
     }

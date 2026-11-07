@@ -107,7 +107,7 @@
 
 <script setup>
 import {defineOptions, nextTick, reactive, ref, watch} from "vue"
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import loading from "@/components/loading/index.vue";
 import {roleSelectUse} from "@/request/role.js";
 import {useRoleStore} from "@/store/role.js";

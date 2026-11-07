@@ -17,17 +17,18 @@ function getPackageName(id) {
     return parts[0]?.startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0];
 }
 
-const elementPlusDeps = new Set([
-    '@ctrl/tinycolor',
-    '@floating-ui/core',
-    '@floating-ui/dom',
-    '@floating-ui/utils',
-    '@popperjs/core',
-    'async-validator',
-    'lodash-unified',
-    'memoize-one',
-    'normalize-wheel-es'
-]);
+// 只给稳定、体积大的依赖分组；Element Plus 组件 JS 由 Rollup 按路由自然拆分
+const VUE_VENDOR = new Set(['vue', 'vue-router', 'pinia', 'pinia-plugin-persistedstate', 'vue-i18n']);
+// 按需加载的小模块固定为独立 chunk，避免被碎片合并并进首屏共享 chunk
+const LAZY_PINS = [
+    [/\/src\/utils\/turnstile-loader\.js$/, 'turnstile-loader'],
+    [/\/src\/components\/tiny-editor\/loader\.js$/, 'tiny-editor-loader'],
+    // 界面文案与同语言的 Element Plus 语言包合成一个 chunk，启动时按当前语言只取一次
+    [/\/src\/i18n\/zh\.js$|\/element-plus\/es\/locale\/lang\/zh-cn\.mjs$/, 'locale-zh'],
+    [/\/src\/i18n\/zh-tw\.js$|\/element-plus\/es\/locale\/lang\/zh-tw\.mjs$/, 'locale-zh-tw'],
+    [/\/src\/i18n\/en\.js$/, 'locale-en'],
+    [/\/src\/i18n\/ja\.js$|\/element-plus\/es\/locale\/lang\/ja\.mjs$/, 'locale-ja'],
+];
 
 function cleanExternalOutDir(outDir) {
     return {
@@ -107,11 +108,16 @@ export default defineConfig(({mode}) => {
                 '@': path.resolve(__dirname, 'src')
             }
         },
+        define: {
+            // vue-i18n 只用 Composition API，生产环境不带 devtools 集成
+            __VUE_I18N_FULL_INSTALL__: true,
+            __VUE_I18N_LEGACY_API__: false,
+            __INTLIFY_PROD_DEVTOOLS__: false,
+        },
         build: {
             target: 'es2022',
             outDir: env.VITE_OUT_DIR || 'dist',
             emptyOutDir: true,
-            assetsInclude: ['**/*.json'],
             modulePreload: {
                 resolveDependencies(filename, deps) {
                     // Keep draft storage out of the initial HTML preload list.
@@ -120,31 +126,25 @@ export default defineConfig(({mode}) => {
             },
             rollupOptions: {
                 output: {
+                    // 合并小于 8 KB 的碎片 chunk（Rollup 只合并无副作用的 chunk，手动 chunk 不参与合并）
+                    experimentalMinChunkSize: 8 * 1024,
                     manualChunks(id) {
                         const normalizedId = id.replace(/\\/g, '/');
+                        // CJS 互操作 helper 必须留在首屏 chunk，否则会把所在的 dayjs/dexie chunk 拖进首屏
+                        if (normalizedId.includes('commonjsHelpers')) return 'vue-vendor';
+                        for (const [pattern, name] of LAZY_PINS) {
+                            if (pattern.test(normalizedId)) return name;
+                        }
                         const packageName = getPackageName(id);
                         if (!packageName) return;
 
-                        if (normalizedId.includes('element-plus/es/components/')) {
-                            const component = normalizedId.split('element-plus/es/components/')[1]?.split('/')[0];
-                            return component ? `element-plus-${component}` : 'element-plus-components';
-                        }
-                        if (packageName === '@element-plus/icons-vue') return 'element-plus-icons';
-                        if (packageName === 'element-plus' || elementPlusDeps.has(packageName)) return 'element-plus-core';
-                        if (packageName === 'echarts') return 'echarts';
+                        if (packageName === 'echarts' || packageName === 'zrender' || packageName === 'tslib') return 'echarts';
                         if (packageName === 'dexie') return 'dexie';
-                        if (packageName.startsWith('@iconify/')) return 'iconify';
-                        if (packageName.startsWith('@vueuse/')) return 'vueuse';
-                        if (packageName.startsWith('@vue/')) return 'vue-core';
-                        if (packageName === 'vue-router') return 'vue-router';
-                        if (packageName === 'vue-i18n' || packageName.startsWith('@intlify/')) return 'vue-i18n';
-                        if (packageName === 'pinia' || packageName === 'pinia-plugin-persistedstate') return 'pinia';
-                        if (packageName === 'vue') return 'vue-core';
-                        if (packageName === 'lodash' || packageName === 'lodash-es') return 'lodash';
-                        if (packageName === 'axios') return 'axios';
-                        if (packageName === 'dayjs') return 'dayjs';
-                        if (packageName === 'nprogress') return 'nprogress';
-                        return 'vendor';
+                        // Element Plus CSS 挂在入口最先导入的 vue-vendor 上，保持它先于 style.css 的层叠顺序
+                        if (packageName === 'element-plus' && /\.css(\?|$)/.test(normalizedId)) return 'vue-vendor';
+                        if (VUE_VENDOR.has(packageName) || packageName.startsWith('@vue/') || packageName.startsWith('@intlify/')) return 'vue-vendor';
+                        // 其余依赖（Element Plus JS 及其 barrel、lodash-es、vueuse、axios、dayjs 等）不分组：
+                        // barrel 一旦进入手动 chunk，会把它静态引用的全部组件一起拖进去
                     }
                 }
             }

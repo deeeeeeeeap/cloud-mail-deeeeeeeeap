@@ -36,10 +36,11 @@
     </div>
 
     <div ref="scroll" class="scroll">
-      <UseVirtualList ref="scrollbarRef"
+      <KeyedVirtualList ref="scrollbarRef"
                         @scroll="onScroll"
                         :list="list"
                         :options="{ itemHeight: itemHeight, overscan: 6 }"
+                        :item-key="rowKey"
                         class="virtual"
                         style="height: 100%"
                         v-if="!loading && emailList.length > 0"
@@ -59,7 +60,6 @@
                  @mouseleave="cancelPreloadEmailDetail"
                  @focusin="preloadEmailDetail(item)"
                  v-if="!item.expand"
-                 :key="item.emailId"
                  @contextmenu="handleContextmenu($event, item)"
                  :style="item.rightChecked ? 'background: var(--right-checked-background)' : ''"
             >
@@ -140,7 +140,7 @@
               <div>{{ $t('noMoreData') }}</div>
             </div>
           </template>
-        </UseVirtualList>
+        </KeyedVirtualList>
       <skeletonBlock v-if="firstLoad && showFirstLoading"
                        :rows="20"
                        :showStar="showStar"
@@ -257,7 +257,7 @@
 </template>
 
 <script setup>
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import skeletonBlock from "@/components/email-scroll/skeleton/index.vue"
 import {computed, onActivated, onDeactivated, reactive, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import {useEmailStore} from "@/store/email.js";
@@ -267,7 +267,7 @@ import {useSettingStore} from "@/store/setting.js";
 import {fromNow} from "@/utils/day.js";
 import {useI18n} from "vue-i18n";
 import {EmailUnreadEnum} from "@/enums/email-enum.js";
-import { UseVirtualList } from '@vueuse/components'
+import KeyedVirtualList from "@/components/email-scroll/keyed-virtual-list.js";
 import {sanitizeHtml} from "@/utils/html-sanitize.js";
 import {createRequestCoordinator} from "@/components/email-scroll/request-coordinator.js";
 import {
@@ -358,6 +358,8 @@ const latestEmail = ref(null)
 const scrollbarRef = ref(null)
 const requestCoordinator = createRequestCoordinator(getSessionGeneration)
 const pagePrefetch = createPagePrefetchController()
+// 最近一次加载完成、还没调度下一页预取的请求
+let prefetchRequest = null
 let refreshPending = false
 let isMobile = ref(innerWidth < 1367)
 let skeletonRows = 0
@@ -459,12 +461,23 @@ function onScroll(e) {
 	scrollTop = target.scrollTop;
 	// 手写触底判断：距底 1200px 内触发预加载，替代 useScroll（省掉每帧 getComputedStyle）
 	isArriveBottom.value = target.scrollHeight - target.scrollTop - target.clientHeight <= 1200
+	// 用户不往下翻时预取下一页是纯开销：滚过已加载高度的 40% 才调度
+	if (prefetchRequest && target.scrollTop > target.scrollHeight * 0.4) {
+		const request = prefetchRequest
+		prefetchRequest = null
+		if (requestCoordinator.isCurrent(request)) scheduleNextPagePrefetch(request)
+	}
 }
 
 
 const list = computed(() => {
   return [...emailList, ...expandList]
 })
+
+// 底部 loading / noMoreData 占位行的 emailId 都是 0，用 expand 区分
+function rowKey(item) {
+  return item.expand || item.emailId
+}
 
 const itemHeight = computed(() => {
     if (props.type === 'all-email') {
@@ -976,7 +989,7 @@ function getEmailList(refresh = false) {
     if (withTotal) {
       total.value = data.total;
     }
-    scheduleNextPagePrefetch(request);
+    prefetchRequest = request;
   }).catch(e => {
     if (!requestCoordinator.isCurrent(request)) {
       return;
@@ -1071,6 +1084,7 @@ function refreshList() {
 function resetEmailSessionState() {
   requestCoordinator.invalidate()
   pagePrefetch.invalidate()
+  prefetchRequest = null
   refreshPending = false
   clearTimeout(preloadTimer)
   emailList.length = 0

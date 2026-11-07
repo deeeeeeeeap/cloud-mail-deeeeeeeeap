@@ -371,7 +371,7 @@ import {
   userAllAccount
 } from '@/request/user.js'
 import {roleSelectUse} from "@/request/role.js";
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import loading from "@/components/loading/index.vue";
 import {tzDayjs} from "@/utils/day.js";
 import {useSettingStore} from "@/store/setting.js";

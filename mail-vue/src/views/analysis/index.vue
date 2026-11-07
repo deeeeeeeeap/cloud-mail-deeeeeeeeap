@@ -122,7 +122,7 @@
 </template>
 
 <script setup>
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import {useTransition} from "@vueuse/core";
 import {defineOptions, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, watch, computed} from "vue";
 import echarts from "@/echarts/index.js";

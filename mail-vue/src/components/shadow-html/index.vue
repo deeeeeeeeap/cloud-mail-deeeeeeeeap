@@ -17,7 +17,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { inlineAttachmentUrl, mailDocument, prepareMailBody } from '@/utils/mail-reader.js';
+import { createMailBody, inlineAttachmentUrl, mailDocument } from '@/utils/mail-reader.js';
 import { safeLink } from '@/utils/html-sanitize.js';
 
 const props = defineProps({
@@ -41,17 +41,32 @@ const allowRemote = ref(false);
 const inlineUrls = ref(new Map());
 const inlineFailed = ref(false);
 const loadingInline = ref(false);
-const prepared = computed(() => prepareMailBody(props.html, { remoteImages: allowRemote.value, inlineUrls: inlineUrls.value }));
+const mailBody = computed(() => createMailBody(props.html));
+const prepared = computed(() => mailBody.value.prepare({ remoteImages: allowRemote.value, inlineUrls: inlineUrls.value }));
 const srcdoc = computed(() => mailDocument(prepared.value.html, allowRemote.value));
 let epoch = 0;
 let controller;
 let observer;
 let animationFrame = 0;
 let detachFrameEvents = () => {};
+let pendingUrls = new Map();
+let flushTimer = 0;
 
 function releaseImages() {
-  for (const url of inlineUrls.value.values()) URL.revokeObjectURL(url);
+  clearTimeout(flushTimer);
+  flushTimer = 0;
+  for (const url of [...inlineUrls.value.values(), ...pendingUrls.values()]) URL.revokeObjectURL(url);
   inlineUrls.value = new Map();
+  pendingUrls = new Map();
+}
+
+// Each inlineUrls change rebuilds srcdoc and reloads the frame, so loaded images are published in batches.
+function flushInlineUrls() {
+  clearTimeout(flushTimer);
+  flushTimer = 0;
+  if (!pendingUrls.size) return;
+  inlineUrls.value = new Map([...inlineUrls.value, ...pendingUrls]);
+  pendingUrls = new Map();
 }
 
 async function boundedImage(response) {
@@ -85,7 +100,7 @@ async function loadInlineImages() {
   allowRemote.value = false;
   frameHeight.value = 160;
   inlineFailed.value = false;
-  const keys = prepareMailBody(props.html).inlineKeys;
+  const keys = prepared.value.inlineKeys;
   loadingInline.value = keys.length > 0;
   if (!keys.length) return;
   if (!props.emailId) { inlineFailed.value = true; loadingInline.value = false; return; }
@@ -106,14 +121,18 @@ async function loadInlineImages() {
         if (currentEpoch !== epoch) return;
         totalBytes += blob.size;
         if (totalBytes > 32 * 1024 * 1024) throw new Error('Inline image display budget exceeded');
-        inlineUrls.value = new Map(inlineUrls.value).set(key, URL.createObjectURL(blob));
+        pendingUrls.set(key, URL.createObjectURL(blob));
+        flushTimer ||= setTimeout(flushInlineUrls, 250);
       } catch (error) {
         if (currentEpoch === epoch && error.name !== 'AbortError') inlineFailed.value = true;
       }
     }
   };
   await Promise.all(Array.from({ length: Math.min(4, pending.length) }, worker));
-  if (currentEpoch === epoch) loadingInline.value = false;
+  if (currentEpoch === epoch) {
+    flushInlineUrls();
+    loadingInline.value = false;
+  }
 }
 
 function resizeFrame() {
@@ -152,7 +171,6 @@ function onFrameLoad() {
 }
 
 watch(() => [props.html, props.emailId, props.scope], loadInlineImages, { immediate: true });
-watch(srcdoc, () => { frameHeight.value = 160; });
 onBeforeUnmount(() => {
   epoch++;
   controller?.abort();

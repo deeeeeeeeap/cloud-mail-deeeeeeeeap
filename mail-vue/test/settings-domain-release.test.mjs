@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync, readdirSync} from 'node:fs'
 import {parse, compileScript, compileTemplate} from 'vue/compiler-sfc'
-import {isNewerStableRelease} from '../src/utils/release-version.js'
+import {isNewerStableRelease, readCachedRelease, writeCachedRelease} from '../src/utils/release-version.js'
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 const source = read('../src/views/sys-setting/index.vue')
@@ -92,9 +92,63 @@ test('invalid, legacy and prerelease metadata do not advertise a stable update',
 test('both packages share 1.3.0 and the displayed version is sourced from the frontend package', () => {
   assert.equal(JSON.parse(read('../package.json')).version, '1.3.0')
   assert.equal(JSON.parse(read('../../mail-worker/package.json')).version, '1.3.0')
-  assert.match(source, /import packageInfo from "\.\.\/\.\.\/\.\.\/package\.json"/)
-  assert.match(source, /const currentVersion = `v\$\{packageInfo\.version\}`/)
+  assert.match(source, /import \{version\} from "\.\.\/\.\.\/\.\.\/package\.json"/)
+  assert.match(source, /const currentVersion = `v\$\{version\}`/)
   assert.match(source, /hasUpdate\.value = isNewerStableRelease\(latest, currentVersion\)/)
+})
+
+function memoryStorage() {
+  const items = new Map()
+  return {getItem: key => items.get(key) ?? null, setItem: (key, value) => items.set(key, String(value))}
+}
+
+test('the release check is reused for six hours, including the no-release answer', () => {
+  const storage = memoryStorage()
+  const start = 1_000_000
+  assert.equal(readCachedRelease(storage, start), null)
+  writeCachedRelease('v1.4.0', storage, start)
+  assert.equal(readCachedRelease(storage, start + 6 * 60 * 60 * 1000 - 1).latest, 'v1.4.0')
+  assert.equal(readCachedRelease(storage, start + 6 * 60 * 60 * 1000), null)
+  writeCachedRelease(undefined, storage, start)
+  assert.deepEqual(readCachedRelease(storage, start), {latest: null, checkedAt: start})
+})
+
+test('broken or unavailable storage falls back to asking GitHub', () => {
+  const storage = memoryStorage()
+  storage.setItem('latest-release-check', '{not json')
+  assert.equal(readCachedRelease(storage), null)
+  const blocked = {getItem() { throw new Error('denied') }, setItem() { throw new Error('quota') }}
+  assert.equal(readCachedRelease(blocked), null)
+  assert.doesNotThrow(() => writeCachedRelease('v1.4.0', blocked))
+})
+
+test('getUpdate answers from the cache without calling GitHub and caches fresh answers', async () => {
+  const calls = []
+  const scope = {
+    getUpdateErrorCount: 1,
+    readCachedRelease: () => ({latest: 'v9.0.0'}),
+    writeCachedRelease: latest => calls.push(['write', latest]),
+    axios: {get: url => { calls.push(['get', url]); return Promise.resolve({data: {tag_name: 'v1.3.0'}}) }},
+    releaseApi: 'https://api.github.com/releases/latest',
+    hasUpdate: {value: false},
+    isNewerStableRelease,
+    currentVersion: 'v1.3.0'
+  }
+  method('getUpdate', scope)()
+  assert.equal(scope.hasUpdate.value, true)
+  assert.deepEqual(calls, [])
+
+  scope.readCachedRelease = () => null
+  method('getUpdate', scope)()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(calls, [['get', scope.releaseApi], ['write', 'v1.3.0']])
+  assert.equal(scope.hasUpdate.value, false)
+
+  calls.length = 0
+  scope.axios.get = () => Promise.reject({response: {status: 404}})
+  method('getUpdate', scope)()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(calls, [['write', null]])
 })
 
 test('the complete settings template and setup script compile together', () => {

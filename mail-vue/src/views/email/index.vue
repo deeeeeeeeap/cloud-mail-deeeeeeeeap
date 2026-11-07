@@ -31,9 +31,10 @@ import {emailList, emailDelete, emailDetail, emailLatest, emailRead} from "@/req
 import {starAdd, starCancel} from "@/request/star.js";
 import {defineOptions, h, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, watch} from "vue";
 import {sleepUntil, waitUntilVisible} from "@/utils/time-utils.js";
+import {createPollBackoff, trackUserActivity} from "@/utils/poll-backoff.js";
 import {createActiveTask} from "@/utils/active-task.js";
 import router from "@/router/index.js";
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import { useRoute } from 'vue-router'
 
 defineOptions({
@@ -82,13 +83,24 @@ function jumpContent(email) {
 
 const existIds = new Set();
 
+// 没有新邮件时逐步放慢轮询；用户操作、切回或聚焦页面、收到新邮件时立即恢复设置的间隔
 async function latest(signal) {
+  const backoff = createPollBackoff()
+  const stopTracking = trackUserActivity(() => backoff.activity())
+  try {
+    await pollLatest(signal, backoff)
+  } finally {
+    stopTracking()
+  }
+}
+
+async function pollLatest(signal, backoff) {
   while (!signal.aborted) {
 
     let autoRefresh = settingStore.settings.autoRefresh;
     //自动刷新关闭时拉长空转间隔
     if (!await waitUntilVisible(signal)) return
-    if (!await sleepUntil(autoRefresh > 1 ? autoRefresh * 1000 : 30000, signal)) return
+    if (!await backoff.wait(autoRefresh > 1 ? autoRefresh * 1000 : 30000, signal)) return
 
     //页面在后台时暂停轮询
     if (!await waitUntilVisible(signal)) return
@@ -113,6 +125,7 @@ async function latest(signal) {
         //确保发起请求时最后一个邮件是当前账号的,或者
         if (accountId === scroll.value.latestEmail?.reqAccountId) {
           list = await emailLatest(latestId, accountId, allReceive, {signal});
+          backoff.settle(list.length)
         }
 
         //确保请求回来后，账号没有切换，时间排序没有改变，全部邮件类型没变
@@ -139,6 +152,7 @@ async function latest(signal) {
         }
       } catch (e) {
         if (signal.aborted) return
+        backoff.settle(0)
         if (e.code === 401 || e.code === 403) {
           settingStore.settings.autoRefresh = 0;
         }

@@ -92,7 +92,7 @@
 <script setup>
 import DropdownChevron from "@/components/dropdown-chevron/index.vue";
 import {computed, defineOptions, ref} from "vue";
-import {Icon} from '@iconify/vue';
+import {Icon} from '@iconify/vue/offline';
 import {ElMessage, ElMessageBox} from "element-plus";
 import Loading from "@/components/loading/index.vue";
 import {maintenanceHealth, maintenanceRepair} from "@/request/maintenance.js";

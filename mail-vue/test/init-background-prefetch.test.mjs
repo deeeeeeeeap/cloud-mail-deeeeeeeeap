@@ -8,7 +8,7 @@ const source = readFileSync(new URL('../src/init/init.js', import.meta.url), 'ut
   .replace(/^import[\s\S]*?;\r?$/gm, '')
   .replace('export async function init()', 'async function init()')
 
-async function startup({token = null, cached = '/background.jpg', background = cached, unauthorized = false} = {}) {
+async function startup({token = null, cached = '/background.jpg', background = cached, unauthorized = false, overrides = {}} = {}) {
   const prefetched = []
   const settings = {lang: 'zh', lastBackgroundUrl: cached}
   const userStore = {}
@@ -20,7 +20,7 @@ async function startup({token = null, cached = '/background.jpg', background = c
     localStorage: {getItem: () => token},
     document: {title: ''},
     navigator: {language: 'zh'},
-    i18n: {global: {locale: {value: ''}}},
+    loadLocaleMessages: async lang => lang,
     normalizeLang: value => value,
     prefetchLoginBackground: src => prefetched.push(src),
     startAuthSession: () => {},
@@ -37,7 +37,8 @@ async function startup({token = null, cached = '/background.jpg', background = c
     installDynamicRoutes: () => {},
     router: {},
     resetSessionState: () => {},
-    cvtR2Url: value => value
+    cvtR2Url: value => value,
+    ...overrides
   }
   const init = new Function(...Object.keys(adapters), `${source}\nreturn init;`)(...Object.values(adapters))
   await init()
@@ -62,3 +63,27 @@ test('a 401 fallback prefetches the login background even when its URL was cache
     prefetched: ['/background.jpg'], cached: '/background.jpg'
   })
 })
+
+for (const token of [null, 'test-session']) {
+  test(`${token ? 'authenticated' : 'anonymous'} startup loads only the current language alongside the API and waits for it`, async () => {
+    const events = []
+    let releaseLocale
+    const startupDone = startup({token, overrides: {
+      loadLocaleMessages: lang => {
+        events.push(`locale:${lang}`)
+        return new Promise(resolve => { releaseLocale = resolve })
+      },
+      websiteConfig: async () => {
+        events.push('websiteConfig')
+        return {title: 'Test', background: '', domainList: []}
+      }
+    }})
+    let settled = false
+    startupDone.then(() => { settled = true })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.deepEqual(events, ['locale:zh', 'websiteConfig'])
+    assert.equal(settled, false)
+    releaseLocale('zh')
+    await startupDone
+  })
+}

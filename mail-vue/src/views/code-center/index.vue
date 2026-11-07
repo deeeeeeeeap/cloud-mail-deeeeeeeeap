@@ -89,7 +89,7 @@
 </template>
 <script setup>
 import {computed, defineOptions, onBeforeUnmount, reactive, ref, watch} from "vue";
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import RefreshListIcon from "@/components/refresh-list-icon/index.vue";
 import {ElMessage} from "element-plus";
 import router from "@/router/index.js";

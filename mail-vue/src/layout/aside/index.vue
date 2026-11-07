@@ -8,7 +8,8 @@
       <el-menu :default-active="route.meta.name" @select="navigate">
         <template v-for="group in visibleGroups" :key="group.label">
           <li v-if="group.label" class="manage-title" role="presentation">{{ $t(group.label) }}</li>
-          <el-menu-item v-for="item in group.items" :key="item.name" :index="item.name">
+          <el-menu-item v-for="item in group.items" :key="item.name" :index="item.name"
+                        @mouseenter="prefetchRoute(item.name)" @focus="prefetchRoute(item.name)">
             <Icon :icon="item.icon" width="20" height="20" aria-hidden="true" />
             <span>{{ $t(item.label) }}</span>
           </el-menu-item>
@@ -21,15 +22,18 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Icon } from '@iconify/vue'
+import { Icon } from '@iconify/vue/offline'
 import { useSettingStore } from '@/store/setting.js'
 import { useUiStore } from '@/store/ui.js'
 import { hasPerm } from '@/perm/perm.js'
+import { createRoutePrefetcher } from '@/utils/route-prefetch.js'
 
 const settingStore = useSettingStore()
 const uiStore = useUiStore()
 const route = useRoute()
 const router = useRouter()
+// 悬停或聚焦菜单时先下载页面 chunk（例如分析页的 echarts），点击后不必再等
+const prefetchRoute = createRoutePrefetcher(router)
 const groups = [
   { label: '', items: [
     { name: 'email', label: 'inbox', icon: 'cloud-mail:inbox' },
@@ -46,6 +50,7 @@ const groups = [
     { name: 'role', label: 'permissions', icon: 'cloud-mail:lock', permission: 'role:query' },
     { name: 'reg-key', label: 'inviteCode', icon: 'cloud-mail:key', permission: 'reg-key:query' },
     { name: 'sys-setting', label: 'SystemSettings', icon: 'cloud-mail:settings', permission: 'setting:query' },
+    { name: 'api-key', label: 'apiKeys', icon: 'cloud-mail:api', permission: 'api-key:manage' },
     { name: 'maintenance', label: 'maintenance', icon: 'cloud-mail:tools', permission: 'maintenance:query' },
   ] },
 ]

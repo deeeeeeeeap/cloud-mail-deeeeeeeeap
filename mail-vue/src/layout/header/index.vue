@@ -79,7 +79,7 @@
 <script setup>
 import DropdownChevron from "@/components/dropdown-chevron/index.vue";
 import {logout} from "@/request/login.js";
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
 import {useRoute} from "vue-router";

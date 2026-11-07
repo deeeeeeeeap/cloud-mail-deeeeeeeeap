@@ -57,7 +57,8 @@ const writerApi = {
   open: (...args) => callWriter('open', ...args),
   openReply: (...args) => callWriter('openReply', ...args),
   openForward: (...args) => callWriter('openForward', ...args),
-  openDraft: (...args) => callWriter('openDraft', ...args)
+  openDraft: (...args) => callWriter('openDraft', ...args),
+  hasUnsavedContent: () => Boolean(writerRef.value?.hasUnsavedContent?.())
 }
 
 const applyLayoutMode = createBreakpointTransition(mobile => {

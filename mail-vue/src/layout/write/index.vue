@@ -1,5 +1,5 @@
 <template>
-  <div class="send" v-show="show">
+  <div ref="writerRoot" class="send" v-show="show">
     <div class="write-box">
       <div class="title">
         <div class="title-left">
@@ -110,8 +110,8 @@
 </template>
 <script setup>
 import tinyEditor from '@/components/tiny-editor/index.vue'
-import {h, nextTick, onMounted, onUnmounted, reactive, ref, toRaw, computed} from "vue";
-import {Icon} from "@iconify/vue";
+import {h, nextTick, onMounted, onUnmounted, reactive, ref, toRaw, computed, watch} from "vue";
+import {Icon} from "@iconify/vue/offline";
 import {useUserStore} from "@/store/user.js";
 import {emailSend} from "@/request/email.js";
 import {isEmail} from "@/utils/verify-utils.js";
@@ -134,12 +134,14 @@ import {saveDraft} from "@/db/draft-repository.js";
 import {registerSessionResetter, getSessionGeneration} from '@/session/auth-session.js'
 import {hasDraftContent, settleDraftClose} from '@/layout/write/close-state.js'
 import {stageProgrammaticWriterContent} from '@/layout/write/content-state.js'
+import {forwardSubject} from '@/layout/write/subject.js'
 
 defineExpose({
   open,
   openReply,
   openForward,
-  openDraft
+  openDraft,
+  hasUnsavedContent: () => show.value && hasDraftContent(form)
 })
 
 const {t} = useI18n()
@@ -151,6 +153,11 @@ const accountStore = useAccountStore()
 const editor = ref({})
 const userStore = useUserStore();
 const show = ref(false);
+const writerRoot = ref(null)
+// v-show 隐藏不会触发 focusout：焦点留在工具栏按钮上时，TinyMCE 的提示气泡会一直显示在页面上
+watch(show, visible => {
+  if (!visible && writerRoot.value?.contains(document.activeElement)) document.activeElement.blur()
+})
 const percent = ref(0)
 let percentMessage = null
 const sending = ref(false)
@@ -557,7 +564,7 @@ function openForward(email) {
 
   email.subject = email.subject || ''
 
-  form.subject = email.subject
+  form.subject = forwardSubject(email.subject)
   form.sendType = 'forward'
 
   defValue.value = ''

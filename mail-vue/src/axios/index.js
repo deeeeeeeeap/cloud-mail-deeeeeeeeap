@@ -77,20 +77,27 @@ http.interceptors.response.use(async res => {
     return Promise.reject(error)
   }
   if (error.message?.includes('Network Error')) {
-    showApiMessage(i18n.global.t('networkErrorMsg'), 'error')
+    showApiMessage(localized('networkErrorMsg'), 'error')
   } else if (error.code === 'ECONNABORTED') {
-    showApiMessage(i18n.global.t('timeoutErrorMsg'), 'error')
+    showApiMessage(localized('timeoutErrorMsg'), 'error')
   } else if (error.response) {
-    showApiMessage(i18n.global.t('serverBusyErrorMsg'), 'error')
+    showApiMessage(localized('serverBusyErrorMsg'), 'error')
   } else {
-    showApiMessage(i18n.global.t('reqFailErrorMsg'), 'error')
+    showApiMessage(localized('reqFailErrorMsg'), 'error')
   }
   return Promise.reject(error)
 })
 
+// 语言包按需加载：启动请求可能早于文案就绪，此时不弹原始 key（init 失败会换成本地化的重试页）
+function localized(key) {
+  return i18n.global.te(key) ? i18n.global.t(key) : ''
+}
+
 function showApiMessage(message, type) {
+  message ||= localized('reqFailErrorMsg')
+  if (!message) return
   ElMessage({
-    message: message || i18n.global.t('reqFailErrorMsg'),
+    message,
     type,
     plain: true,
     grouping: true,

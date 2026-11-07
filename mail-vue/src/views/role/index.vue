@@ -147,7 +147,7 @@
   </div>
 </template>
 <script setup>
-import {Icon} from "@iconify/vue";
+import {Icon} from "@iconify/vue/offline";
 import {defineOptions, nextTick, onMounted, onUnmounted, reactive, ref} from "vue";
 import {roleAdd, roleDelete, rolePermTree, roleRoleList, roleSet, roleSetDef} from "@/request/role.js";
 import loading from '@/components/loading/index.vue';

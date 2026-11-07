@@ -5,7 +5,7 @@ import vm from 'node:vm'
 import axios from 'axios'
 import { classifyHttpError, isCurrentSessionResponse } from '../src/axios/response-error.js'
 
-function harness() {
+function harness({ localeLoaded = true } = {}) {
   const messages = []
   let rejected, fulfilled, cleared = 0, reloaded = 0
   const source = readFileSync(new URL('../src/axios/index.js', import.meta.url), 'utf8')
@@ -17,7 +17,7 @@ function harness() {
       request: { use() {} }, response: { use(ok, fail) { fulfilled = ok; rejected = fail } }
     } }) },
     classifyHttpError, isCurrentSessionResponse,
-    i18n: { global: { t: key => key } },
+    i18n: { global: { t: key => key, te: () => localeLoaded } },
     getSessionGeneration: () => 2,
     clearAuthSession: async () => { cleared++ },
     sessionStorage: { getItem: () => null, setItem() {} },
@@ -59,6 +59,15 @@ test('non-JSON edge failures stay generic and canceled requests stay silent', as
   h.messages.length = 0
   await assert.rejects(h.rejected(new axios.CanceledError()))
   assert.deepEqual(h.messages, [])
+})
+
+test('generic errors stay silent until the startup locale has loaded, business messages still show', async () => {
+  const h = harness({ localeLoaded: false })
+  await assert.rejects(h.rejected({ config: {}, response: { status: 500, data: { code: 500, message: 'private details' } } }))
+  await assert.rejects(h.rejected({ config: {}, message: 'Network Error' }))
+  assert.deepEqual(h.messages, [])
+  await assert.rejects(h.rejected({ config: {}, response: { status: 400, data: { code: 400, message: 'Actionable API message' } } }))
+  assert.deepEqual(h.messages, ['Actionable API message'])
 })
 
 test('a late 401 cannot remove the newer session', async () => {
